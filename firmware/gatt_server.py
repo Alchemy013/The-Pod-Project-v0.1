@@ -1,5 +1,4 @@
 import json
-import subprocess
 import dbus
 import dbus.mainloop.glib
 import dbus.service
@@ -241,12 +240,6 @@ def _set_discoverable(bus, adapter_path):
         print(f'[ADV] Adapter set discoverable as "{DEVICE_NAME}"')
     except Exception as e:
         print(f'[ADV] Warning: could not set discoverable: {e}')
-    try:
-        subprocess.Popen(['btmgmt', 'advertising', 'on'],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print('[ADV] btmgmt advertising on (background)')
-    except Exception as e:
-        print(f'[ADV] btmgmt warning: {e}')
 
 
 def start_server(command_handler):
@@ -270,6 +263,15 @@ def start_server(command_handler):
     )
 
     _set_discoverable(bus, adapter_path)
+
+    # Register advertisement via D-Bus — works headless, no btmgmt/TTY needed
+    adv = ThePodAdvertisement(bus)
+    adv_mgr = dbus.Interface(bus.get_object(BLUEZ_SVC, adapter_path), LE_ADV_MGR_IFACE)
+    adv_mgr.RegisterAdvertisement(
+        dbus.ObjectPath(ThePodAdvertisement.PATH), {},
+        reply_handler=lambda: print('[ADV] Advertisement registered'),
+        error_handler=lambda e: print(f'[ADV] Advertisement error: {e}'),
+    )
 
     agent = AutoPairAgent(bus)
     agent_mgr = dbus.Interface(bus.get_object(BLUEZ_SVC, '/org/bluez'), AGENT_MGR_IFACE)

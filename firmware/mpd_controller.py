@@ -63,6 +63,16 @@ class MPDController:
     def play_id(self, song_id: str):
         self._cmd(self._client.playid, song_id)
 
+    def play_at(self, index: int):
+        self._cmd(self._client.play, index)
+
+    def get_all_file_paths(self) -> list:
+        try:
+            entries = self._cmd(self._client.listall) or []
+            return [e['file'] for e in entries if 'file' in e]
+        except Exception:
+            return []
+
     def set_shuffle(self, enabled: bool):
         self._cmd(self._client.random, 1 if enabled else 0)
 
@@ -111,6 +121,9 @@ class MPDController:
     def get_volume(self) -> int:
         status = self.get_status()
         return max(0, min(100, int(status.get('volume', 75))))
+
+    def update(self):
+        self._cmd(self._client.update)
 
     def pause_if_playing(self):
         try:

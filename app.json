@@ -8,12 +8,16 @@
     "scheme": "thepod",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.alchemy13.ThePod",
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "ThePod uses Bluetooth to connect to your music player.",
         "NSBluetoothPeripheralUsageDescription": "ThePod uses Bluetooth to connect to your music player.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        },
+        "UIBackgroundModes": ["audio"]
       }
     },
     "android": {

@@ -11,3 +11,5 @@ MPD_PORT         = 6600
 MUSIC_DIR        = '/var/lib/mpd/music'
 MAX_CHUNK_BYTES  = 430   # 430 chars + ~75 byte envelope = ~505 bytes, under 512-byte iOS ATT limit
 MAX_SAFE_BYTES   = 430   # send directly if encoded payload fits in one packet
+
+HTTP_PORT        = 8080

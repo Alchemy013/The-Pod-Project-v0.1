@@ -1,19 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Device } from 'react-native-ble-plx';
 import { useBluetoothStore } from '@/store/bluetooth.store';
 import { useLibraryStore } from '@/store/library.store';
 import { usePlayerStore } from '@/store/player.store';
 import { podService } from '@/services/bluetooth/BluetoothService';
 import { POD_DEVICE_NAME } from '@/services/bluetooth/protocol';
+import { pickAudioFiles, uploadFiles, UploadProgress } from '@/services/transfer/UploadService';
+import { isPodReachable, openWifiSettings } from '@/services/transfer/WifiService';
 
 interface StorageInfo {
   totalGB: number;
@@ -21,6 +25,14 @@ interface StorageInfo {
   freeGB: number;
   trackCount: number;
 }
+
+interface BatteryInfo {
+  percent: number;
+  charging: boolean;
+  minutesRemaining: number | null;
+}
+
+type EqPreset = 'flat' | 'bass' | 'vocal' | 'treble';
 
 function SpecRow({ label, value }: { label: string; value: string }) {
   return (
@@ -31,22 +43,92 @@ function SpecRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ConnectedView({ onDisconnect }: { onDisconnect: () => void }) {
+function ConnectedView({ onDisconnect, podIp, podPort }: {
+  onDisconnect: () => void;
+  podIp: string | null;
+  podPort: number;
+}) {
+  const { fetchLibrary } = useLibraryStore();
   const [storage, setStorage] = useState<StorageInfo | null>(null);
+  const [battery, setBattery] = useState<BatteryInfo | null>(null);
+  const [eqPreset, setEqPreset] = useState<EqPreset>('flat');
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const [uploadStep, setUploadStep] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => {
       podService.request({ cmd: 'GET_STORAGE' }, 10000)
         .then(res => { if (res.type === 'STORAGE') setStorage(res); })
         .catch(() => {});
+      podService.request({ cmd: 'GET_BATTERY' }, 10000)
+        .then(res => { if (res.type === 'BATTERY') setBattery(res); })
+        .catch(() => {});
     }, 500);
     return () => clearTimeout(t);
   }, []);
 
+  const handleEqPreset = async (preset: EqPreset) => {
+    setEqPreset(preset);
+    podService.request({ cmd: 'SET_EQ', preset }, 10000).catch(() => {});
+  };
+
+  const handleUpload = async () => {
+    if (!podIp) {
+      Alert.alert('Not Connected', 'ThePod is not reachable. Make sure it is powered on.');
+      return;
+    }
+    setUploadError(null);
+
+    setUploadStep('Checking connection…');
+    const reachable = await isPodReachable(podIp, podPort);
+    setUploadStep(null);
+
+    if (!reachable) {
+      Alert.alert(
+        'Connect to ThePod Wi-Fi',
+        'Your iPhone needs to be on the ThePod Wi-Fi network to transfer music.\n\nSSID: ThePod\nPassword: thepodmusic',
+        [
+          { text: 'Open Wi-Fi Settings', onPress: openWifiSettings },
+          { text: 'Cancel', style: 'cancel' },
+        ],
+      );
+      return;
+    }
+
+    const files = await pickAudioFiles();
+    if (files.length === 0) return;
+
+    abortRef.current = new AbortController();
+    try {
+      await uploadFiles(podIp, podPort, files, setUploadProgress, abortRef.current.signal);
+      setUploadProgress(null);
+
+      const count = files.length;
+      setUploadSuccess(`${count} ${count === 1 ? 'file' : 'files'} added to library`);
+      if (successTimer.current) clearTimeout(successTimer.current);
+      successTimer.current = setTimeout(() => setUploadSuccess(null), 4000);
+
+      // Refresh storage badge and music library so new tracks appear immediately
+      podService.request({ cmd: 'GET_STORAGE' }, 10000)
+        .then(res => { if (res.type === 'STORAGE') setStorage(res); })
+        .catch(() => {});
+      fetchLibrary().catch(() => {});
+    } catch (e: any) {
+      setUploadProgress(null);
+      if (e?.message !== 'Cancelled') setUploadError(e?.message ?? 'Upload failed');
+    } finally {
+      abortRef.current = null;
+    }
+  };
+
   const usedPct = storage ? (storage.usedGB / storage.totalGB) * 100 : 0;
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       <Text style={styles.screenTitle}>Pod</Text>
 
       {/* Connection status */}
@@ -81,6 +163,46 @@ function ConnectedView({ onDisconnect }: { onDisconnect: () => void }) {
         <SpecRow label="Firmware" value="1.0.0" />
       </View>
 
+      {/* Equalizer */}
+      <Text style={styles.sectionTitle}>Equalizer</Text>
+      <View style={styles.card}>
+        <View style={styles.eqRow}>
+          {(['flat', 'bass', 'vocal', 'treble'] as EqPreset[]).map(preset => (
+            <Pressable
+              key={preset}
+              style={[styles.eqBtn, eqPreset === preset && styles.eqBtnActive]}
+              onPress={() => handleEqPreset(preset)}
+            >
+              <Text style={[styles.eqBtnText, eqPreset === preset && styles.eqBtnTextActive]}>
+                {preset.charAt(0).toUpperCase() + preset.slice(1)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={styles.eqNote}>Requires one-time EQ setup on ThePod</Text>
+      </View>
+
+      {/* Battery */}
+      <Text style={styles.sectionTitle}>Power</Text>
+      <View style={styles.card}>
+        {battery ? (
+          <View style={styles.batteryRow}>
+            <View style={styles.batteryIconWrap}>
+              <View style={styles.batteryIcon}>
+                <View style={[styles.batteryFill, { width: `${battery.percent}%` as any }]} />
+              </View>
+              <View style={styles.batteryNub} />
+            </View>
+            <Text style={styles.batteryPct}>{battery.percent}%</Text>
+            <Text style={styles.batteryStatus}>
+              {battery.charging ? 'Powered' : 'On battery'}
+            </Text>
+          </View>
+        ) : (
+          <ActivityIndicator color="#8E8E93" size="small" />
+        )}
+      </View>
+
       {/* Storage */}
       <Text style={styles.sectionTitle}>Storage</Text>
       <View style={styles.card}>
@@ -98,11 +220,76 @@ function ConnectedView({ onDisconnect }: { onDisconnect: () => void }) {
         )}
       </View>
 
+      {/* Upload Music */}
+      <Text style={styles.sectionTitle}>Music</Text>
+      <View style={styles.card}>
+        {uploadStep ? (
+          <>
+            <ActivityIndicator color="#8E8E93" size="small" style={{ marginBottom: 10 }} />
+            <Text style={styles.uploadStatusText}>{uploadStep}</Text>
+          </>
+        ) : uploadProgress ? (
+          <>
+            <View style={styles.uploadProgressBar}>
+              <View style={[
+                styles.uploadProgressFill,
+                {
+                  width: `${uploadProgress.bytesTotal > 0
+                    ? Math.round((uploadProgress.bytesSent / uploadProgress.bytesTotal) * 100)
+                    : 0}%` as any,
+                },
+              ]} />
+            </View>
+            <Text style={styles.uploadStatusText}>
+              {uploadProgress.index}/{uploadProgress.total} — {uploadProgress.file}
+            </Text>
+            {uploadProgress.bytesTotal > 0 && (
+              <Text style={styles.uploadPctText}>
+                {Math.round((uploadProgress.bytesSent / uploadProgress.bytesTotal) * 100)}%
+              </Text>
+            )}
+          </>
+        ) : uploadSuccess ? (
+          <View style={styles.uploadSuccessRow}>
+            <Text style={styles.uploadSuccessText}>✓ {uploadSuccess}</Text>
+          </View>
+        ) : (
+          <Pressable style={styles.uploadBtn} onPress={handleUpload}>
+            <Text style={styles.uploadBtnText}>+ Add Music from Files</Text>
+          </Pressable>
+        )}
+        {uploadError && <Text style={styles.uploadErrorText}>{uploadError}</Text>}
+      </View>
+
       {/* Disconnect */}
       <Pressable style={styles.disconnectBtn} onPress={onDisconnect}>
         <Text style={styles.disconnectText}>Disconnect</Text>
       </Pressable>
-    </View>
+
+      {/* Power off */}
+      <Pressable
+        style={styles.powerBtn}
+        onPress={() => {
+          Alert.alert(
+            'Power Off ThePod',
+            'This will safely shut down the Raspberry Pi. You will need to physically unplug and replug it to turn it back on.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Power Off', style: 'destructive', onPress: async () => {
+                  try {
+                    await podService.request({ cmd: 'SHUTDOWN' }, 5000);
+                  } catch {}
+                  onDisconnect();
+                },
+              },
+            ],
+          );
+        }}
+      >
+        <Text style={styles.powerText}>Power Off Pod</Text>
+      </Pressable>
+    </ScrollView>
   );
 }
 
@@ -141,7 +328,7 @@ function DeviceRow({ device, isConnected, isConnecting, onPress }: {
 }
 
 export default function PodScreen() {
-  const { connectionState, device, scannedDevices, error, startScan, connect, disconnect } =
+  const { connectionState, device, scannedDevices, error, podIp, podPort, startScan, connect, disconnect } =
     useBluetoothStore();
   const { fetchLibrary, clear: clearLibrary } = useLibraryStore();
   const { refresh: refreshPlayer } = usePlayerStore();
@@ -172,11 +359,11 @@ export default function PodScreen() {
   };
 
   if (isConnected) {
-    return <ConnectedView onDisconnect={handleDisconnect} />;
+    return <ConnectedView onDisconnect={handleDisconnect} podIp={podIp} podPort={podPort} />;
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Text style={styles.screenTitle}>Pod</Text>
 
       {/* Status */}
@@ -235,7 +422,7 @@ export default function PodScreen() {
           ) : null
         }
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -247,8 +434,9 @@ const TEXT_SEC = '#8E8E93';
 const GREEN = '#32D74B';
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG, paddingTop: 60 },
-  screenTitle: { color: TEXT, fontSize: 32, fontWeight: '700', paddingHorizontal: 20, marginBottom: 20 },
+  container: { flex: 1, backgroundColor: BG },
+  scrollContent: { paddingTop: 60, paddingBottom: 120 },
+  screenTitle: { color: TEXT, fontSize: 32, fontWeight: '700', paddingHorizontal: 20, marginBottom: 20, paddingTop: 16 },
 
   connectedCard: {
     marginHorizontal: 20, marginBottom: 24,
@@ -278,9 +466,40 @@ const styles = StyleSheet.create({
   specValue: { color: TEXT, fontSize: 15, fontWeight: '500' },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER },
 
+  eqRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  eqBtn: { flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: 'center', backgroundColor: '#2C2C2E' },
+  eqBtnActive: { backgroundColor: '#FFFFFF' },
+  eqBtnText: { color: '#8E8E93', fontSize: 13, fontWeight: '600' },
+  eqBtnTextActive: { color: '#000000' },
+  eqNote: { color: '#48484A', fontSize: 11, textAlign: 'center' },
+
+  batteryRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  batteryIconWrap: { flexDirection: 'row', alignItems: 'center' },
+  batteryIcon: {
+    width: 36, height: 18, borderRadius: 4,
+    borderWidth: 1.5, borderColor: '#8E8E93',
+    padding: 2, overflow: 'hidden',
+  },
+  batteryFill: { height: '100%', backgroundColor: GREEN, borderRadius: 2 },
+  batteryNub: { width: 3, height: 8, backgroundColor: '#8E8E93', borderRadius: 1, marginLeft: 2 },
+  batteryPct: { color: TEXT, fontSize: 15, fontWeight: '600' },
+  batteryStatus: { color: TEXT_SEC, fontSize: 13 },
+
   storageBar: { height: 6, backgroundColor: '#2C2C2E', borderRadius: 3, marginBottom: 10, overflow: 'hidden' },
   storageBarFill: { height: 6, backgroundColor: GREEN, borderRadius: 3 },
   storageText: { color: TEXT_SEC, fontSize: 13 },
+
+  uploadBtn: {
+    paddingVertical: 12, alignItems: 'center',
+  },
+  uploadBtnText: { color: TEXT, fontSize: 15, fontWeight: '500' },
+  uploadStatusText: { color: TEXT_SEC, fontSize: 13, textAlign: 'center', marginTop: 2 },
+  uploadPctText: { color: TEXT_SEC, fontSize: 11, textAlign: 'center', marginTop: 4 },
+  uploadProgressBar: { height: 4, backgroundColor: '#2C2C2E', borderRadius: 2, marginBottom: 8, overflow: 'hidden' },
+  uploadProgressFill: { height: 4, backgroundColor: GREEN, borderRadius: 2 },
+  uploadSuccessRow: { paddingVertical: 10, alignItems: 'center' },
+  uploadSuccessText: { color: GREEN, fontSize: 14, fontWeight: '600' },
+  uploadErrorText: { color: '#FF453A', fontSize: 13, marginTop: 8, textAlign: 'center' },
 
   disconnectBtn: {
     marginHorizontal: 20, marginTop: 8, paddingVertical: 14,
@@ -288,6 +507,12 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#FF453A33',
   },
   disconnectText: { color: '#FF453A', fontSize: 16, fontWeight: '600' },
+  powerBtn: {
+    marginHorizontal: 20, marginTop: 10, marginBottom: 8, paddingVertical: 14,
+    borderRadius: 14, alignItems: 'center',
+    borderWidth: 1, borderColor: '#2C2C2E',
+  },
+  powerText: { color: '#636366', fontSize: 15, fontWeight: '500' },
 
   statusCard: { marginHorizontal: 20, marginBottom: 16, backgroundColor: SURFACE, borderRadius: 14, padding: 16 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },

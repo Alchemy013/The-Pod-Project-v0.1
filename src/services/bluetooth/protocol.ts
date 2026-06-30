@@ -27,7 +27,11 @@ export type PodCommand =
   | { cmd: 'GET_QUEUE' }
   | { cmd: 'GET_BATTERY' }
   | { cmd: 'GET_STORAGE' }
-  | { cmd: 'GET_ALBUM_ART'; path: string; size?: 'small' | 'large' };
+  | { cmd: 'GET_ALBUM_ART'; path: string; size?: 'small' | 'large' }
+  | { cmd: 'GET_INFO' }
+  | { cmd: 'SHUTDOWN' }
+  | { cmd: 'DELETE_TRACK'; path: string }
+  | { cmd: 'SET_EQ'; preset: 'flat' | 'bass' | 'vocal' | 'treble' };
 
 export type PodCommandWithId = PodCommand & { _id: string };
 
@@ -58,7 +62,8 @@ export type PodResponse =
   | { type: 'STORAGE'; _id?: string; totalGB: number; usedGB: number; freeGB: number; trackCount: number }
   | { type: 'ALBUM_ART'; _id?: string; path: string; data: string }
   | { type: 'CHUNK'; _id: string; seq: number; total: number; data: string }
-  | { type: 'CHUNK_END'; _id: string; seq: number; total: number; data: string };
+  | { type: 'CHUNK_END'; _id: string; seq: number; total: number; data: string }
+  | { type: 'INFO'; _id?: string; ip: string; port: number; name: string; firmwareVersion: string };
 
 function stringToBase64(str: string): string {
   const encoder = new TextEncoder();

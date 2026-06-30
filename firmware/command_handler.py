@@ -1,9 +1,23 @@
 import json
+import subprocess
 import base64 as b64
 from gi.repository import GLib
-from config import MAX_CHUNK_BYTES, MAX_SAFE_BYTES
+from config import MAX_CHUNK_BYTES, MAX_SAFE_BYTES, HTTP_PORT
 from mpd_controller import MPDController
 from library_manager import build_library
+from http_server import get_local_ip
+
+EQ_BANDS = [
+    '00. 31 Hz', '01. 63 Hz', '02. 125 Hz', '03. 250 Hz', '04. 500 Hz',
+    '05. 1 kHz', '06. 2 kHz', '07. 4 kHz', '08. 8 kHz', '09. 16 kHz',
+]
+
+EQ_PRESETS = {
+    'flat':   [50, 50, 50, 50, 50, 50, 50, 50, 50, 50],
+    'bass':   [72, 67, 60, 54, 48, 46, 46, 46, 46, 46],
+    'vocal':  [38, 40, 43, 50, 63, 68, 63, 54, 48, 46],
+    'treble': [46, 46, 46, 46, 46, 48, 54, 62, 70, 76],
+}
 
 
 class CommandHandler:
@@ -44,6 +58,10 @@ class CommandHandler:
             'GET_BATTERY': self._get_battery,
             'GET_STORAGE': self._get_storage,
             'GET_ALBUM_ART': self._get_album_art,
+            'GET_INFO': self._get_info,
+            'SHUTDOWN': self._shutdown,
+            'DELETE_TRACK': self._delete_track,
+            'SET_EQ': self._set_eq,
         }.get(cmd)
 
         if handler is None:
@@ -140,8 +158,16 @@ class CommandHandler:
         if not path:
             self._send_small({'type': 'ERROR', 'cmd': 'PLAY_SONG', 'msg': 'No path', '_id': req_id})
             return
-        self.mpd.clear_queue_and_add([path])
-        self.mpd.play()
+        # Populate the full library into the MPD queue so autoplay and shuffle work
+        all_files = self.mpd.get_all_file_paths()
+        if not all_files:
+            all_files = [path]
+        self.mpd.clear_queue_and_add(all_files)
+        try:
+            idx = all_files.index(path)
+            self.mpd.play_at(idx)
+        except (ValueError, Exception):
+            self.mpd.play()
         self._push_now_playing(req_id)
 
     def _play_album(self, cmd, req_id):
@@ -162,10 +188,12 @@ class CommandHandler:
     def _shuffle(self, cmd, req_id):
         self.mpd.set_shuffle(bool(cmd.get('enabled', False)))
         self._send_small({'type': 'OK', 'cmd': 'SHUFFLE', '_id': req_id})
+        self._push_now_playing(None)
 
     def _repeat(self, cmd, req_id):
         self.mpd.set_repeat(cmd.get('mode', 'off'))
         self._send_small({'type': 'OK', 'cmd': 'REPEAT', '_id': req_id})
+        self._push_now_playing(None)
 
     def _get_now_playing(self, cmd, req_id):
         self._push_now_playing(req_id)
@@ -249,6 +277,56 @@ class CommandHandler:
         except Exception as e:
             self._send_small({'type': 'ERROR', 'cmd': 'GET_STORAGE', 'msg': str(e), '_id': req_id})
 
+    def _shutdown(self, cmd, req_id):
+        import subprocess
+        self._send_small({'type': 'OK', 'cmd': 'SHUTDOWN', '_id': req_id})
+        # Small delay so the BLE response has time to transmit before the process dies
+        GLib.timeout_add(800, lambda: subprocess.Popen(['sudo', 'shutdown', '-h', 'now']) and False)
+
+    def _delete_track(self, cmd, req_id):
+        import os
+        from config import MUSIC_DIR
+        path = cmd.get('path', '')
+        if not path:
+            self._send_small({'type': 'ERROR', 'cmd': 'DELETE_TRACK', 'msg': 'No path', '_id': req_id})
+            return
+        music_root = os.path.realpath(MUSIC_DIR)
+        resolved = os.path.realpath(os.path.join(music_root, path))
+        if not resolved.startswith(music_root + os.sep):
+            self._send_small({'type': 'ERROR', 'cmd': 'DELETE_TRACK', 'msg': 'Invalid path', '_id': req_id})
+            return
+        try:
+            os.remove(resolved)
+            self.mpd.update()
+            self._send_small({'type': 'OK', 'cmd': 'DELETE_TRACK', '_id': req_id})
+        except FileNotFoundError:
+            self._send_small({'type': 'ERROR', 'cmd': 'DELETE_TRACK', 'msg': 'File not found', '_id': req_id})
+        except Exception as e:
+            self._send_small({'type': 'ERROR', 'cmd': 'DELETE_TRACK', 'msg': str(e), '_id': req_id})
+
+    def _set_eq(self, cmd, req_id):
+        preset = cmd.get('preset', 'flat')
+        values = EQ_PRESETS.get(preset, EQ_PRESETS['flat'])
+        try:
+            for band, val in zip(EQ_BANDS, values):
+                subprocess.run(
+                    ['amixer', '-D', 'equal', 'set', band, f'{val}%'],
+                    capture_output=True, timeout=2,
+                )
+            self._send_small({'type': 'OK', 'cmd': 'SET_EQ', 'preset': preset, '_id': req_id})
+        except Exception as e:
+            self._send_small({'type': 'ERROR', 'cmd': 'SET_EQ', 'msg': str(e), '_id': req_id})
+
+    def _get_info(self, cmd, req_id):
+        self._send_small({
+            'type': 'INFO',
+            '_id': req_id,
+            'ip': get_local_ip(),
+            'port': HTTP_PORT,
+            'name': 'ThePod',
+            'firmwareVersion': '1.0.0',
+        })
+
     def _push_now_playing(self, req_id):
         status = self.mpd.get_status()
         current = self.mpd.get_current_song()
@@ -268,6 +346,16 @@ class CommandHandler:
             repeat = 'off'
 
         song = self._format_song(current) if current else None
+
+        # Inject live audio format from MPD status (e.g. "96000:24:2")
+        if song:
+            audio = status.get('audio', '')
+            parts = audio.split(':') if audio else []
+            try:
+                song['sampleRate'] = int(parts[0]) if len(parts) > 0 else 0
+                song['bitDepth'] = int(parts[1]) if len(parts) > 1 else 0
+            except (ValueError, IndexError):
+                pass
 
         self._send_large({
             'type': 'NOW_PLAYING',

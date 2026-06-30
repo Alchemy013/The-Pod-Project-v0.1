@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { NowPlaying, PlaybackState, RepeatMode, Song } from '@/types/music';
 import { podService } from '@/services/bluetooth/BluetoothService';
+import { updateLockScreen } from '@/services/audio/LockScreenService';
 
 interface PlayerStore extends NowPlaying {
   play: () => Promise<void>;
@@ -16,6 +17,7 @@ interface PlayerStore extends NowPlaying {
   toggleShuffle: () => Promise<void>;
   cycleRepeat: () => Promise<void>;
   refresh: () => Promise<void>;
+  loadQueue: () => Promise<void>;
   applyNowPlaying: (data: {
     song: Song | null;
     playbackState: PlaybackState;
@@ -30,12 +32,20 @@ interface PlayerStore extends NowPlaying {
 
 const REPEAT_CYCLE: RepeatMode[] = ['off', 'one', 'all'];
 
+// Volume curve: quadratic with 70% MPD ceiling.
+// Prevents ear damage at max and gives fine control at low values.
+// UI 0-100 → MPD 0-70:  mpd = (ui/100)^2 * 70
+// MPD 0-70 → UI 0-100:  ui = sqrt(mpd/70) * 100
+const VOL_MAX = 15;
+const uiToMpd = (ui: number) => Math.round(Math.pow(ui / 100, 2) * VOL_MAX);
+const mpdToUi = (mpd: number) => Math.round(Math.sqrt(Math.max(0, mpd) / VOL_MAX) * 100);
+
 export const usePlayerStore = create<PlayerStore>((set, get) => ({
   song: null,
   playbackState: 'stopped',
   position: 0,
   duration: 0,
-  volume: 75,
+  volume: 50,
   shuffle: false,
   repeat: 'off',
   queue: [],
@@ -46,7 +56,7 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
   next: () => podService.sendCommand({ cmd: 'NEXT' }),
   previous: () => podService.sendCommand({ cmd: 'PREVIOUS' }),
   stop: () => podService.sendCommand({ cmd: 'STOP' }),
-  setVolume: (value) => podService.sendCommand({ cmd: 'SET_VOLUME', value }),
+  setVolume: (value) => podService.sendCommand({ cmd: 'SET_VOLUME', value: uiToMpd(value) }),
   seek: (seconds) => podService.sendCommand({ cmd: 'SET_POSITION', seconds }),
   playSong: (path) => podService.sendCommand({ cmd: 'PLAY_SONG', path }),
   playAlbum: (id) => podService.sendCommand({ cmd: 'PLAY_ALBUM', id }),
@@ -70,6 +80,23 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
     }
   },
 
-  applyNowPlaying: (data) => set(data),
+  loadQueue: async () => {
+    const response = await podService.request({ cmd: 'GET_QUEUE' }, 15000);
+    if (response.type === 'QUEUE') {
+      set({ queue: response.songs ?? [], queueIndex: response.index ?? 0 });
+    }
+  },
+
+  applyNowPlaying: (data) => {
+    set({ ...data, volume: mpdToUi(data.volume) });
+    updateLockScreen({
+      title: data.song?.title ?? 'ThePod',
+      artist: data.song?.artist ?? '',
+      album: data.song?.album ?? '',
+      duration: data.duration,
+      position: data.position,
+      isPlaying: data.playbackState === 'playing',
+    }).catch(() => {});
+  },
   setPosition: (position) => set({ position }),
 }));

@@ -1,9 +1,13 @@
 import { useEffect } from 'react';
 import AppTabs from '@/components/app-tabs';
 import { DarkTheme, ThemeProvider } from 'expo-router';
+import TrackPlayer from 'react-native-track-player';
 import { podService } from '@/services/bluetooth/BluetoothService';
 import { usePlayerStore } from '@/store/player.store';
 import { useBluetoothStore } from '@/store/bluetooth.store';
+import { setupLockScreen } from '@/services/audio/LockScreenService';
+
+TrackPlayer.registerPlaybackService(() => require('@/services/audio/PlaybackService'));
 
 function NotificationSync() {
   const applyNowPlaying = usePlayerStore((s) => s.applyNowPlaying);
@@ -12,6 +16,7 @@ function NotificationSync() {
 
   useEffect(() => {
     autoConnect();
+    setupLockScreen();
   }, []);
 
   useEffect(() => {

@@ -12,6 +12,8 @@ interface BluetoothStore {
   device: Device | null;
   scannedDevices: Device[];
   error: string | null;
+  podIp: string | null;
+  podPort: number;
 
   autoConnect: () => Promise<void>;
   startScan: () => Promise<void>;
@@ -25,6 +27,8 @@ export const useBluetoothStore = create<BluetoothStore>((set, get) => ({
   device: null,
   scannedDevices: [],
   error: null,
+  podIp: null,
+  podPort: 8080,
 
   autoConnect: async () => {
     if (get().connectionState !== 'disconnected') return;
@@ -37,7 +41,20 @@ export const useBluetoothStore = create<BluetoothStore>((set, get) => ({
     try {
       await podService.connect(savedId);
       const device = podService.connectedDevice;
-      set({ connectionState: 'connected', device });
+      let podIp: string | null = null;
+      let podPort = 8080;
+      try {
+        const info = await podService.request({ cmd: 'GET_INFO' }, 5000);
+        if (info.type === 'INFO') { podIp = info.ip; podPort = info.port; }
+      } catch {}
+      set({ connectionState: 'connected', device, podIp, podPort });
+      // Auto-resume: if MPD has a song loaded but isn't playing, start it
+      try {
+        const np = await podService.request({ cmd: 'GET_NOW_PLAYING' }, 4000);
+        if (np.type === 'NOW_PLAYING' && np.song && np.playbackState !== 'playing') {
+          podService.sendCommand({ cmd: 'PLAY' }).catch(() => {});
+        }
+      } catch {}
     } catch {
       set({ connectionState: 'disconnected' });
     }
@@ -69,7 +86,15 @@ export const useBluetoothStore = create<BluetoothStore>((set, get) => ({
       await podService.connect(deviceId);
       const device = podService.connectedDevice;
       await AsyncStorage.setItem(SAVED_DEVICE_KEY, deviceId);
-      set({ connectionState: 'connected', device });
+
+      let podIp: string | null = null;
+      let podPort = 8080;
+      try {
+        const info = await podService.request({ cmd: 'GET_INFO' }, 5000);
+        if (info.type === 'INFO') { podIp = info.ip; podPort = info.port; }
+      } catch {}
+
+      set({ connectionState: 'connected', device, podIp, podPort });
     } catch (error) {
       set({
         connectionState: 'disconnected',
@@ -82,8 +107,8 @@ export const useBluetoothStore = create<BluetoothStore>((set, get) => ({
   disconnect: async () => {
     try { await podService.disconnect(); } catch {}
     await AsyncStorage.removeItem(SAVED_DEVICE_KEY);
-    set({ connectionState: 'disconnected', device: null });
+    set({ connectionState: 'disconnected', device: null, podIp: null });
   },
 
-  setDisconnected: () => set({ connectionState: 'disconnected', device: null }),
+  setDisconnected: () => set({ connectionState: 'disconnected', device: null, podIp: null }),
 }));
