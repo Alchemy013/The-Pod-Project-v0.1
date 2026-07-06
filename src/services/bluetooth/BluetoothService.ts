@@ -1,14 +1,14 @@
 import { BleManager, Device, State, Subscription } from 'react-native-ble-plx';
 import {
-  POD_SERVICE_UUID,
   POD_COMMAND_UUID,
-  POD_STATUS_UUID,
   POD_DEVICE_NAME,
+  POD_SERVICE_UUID,
+  POD_STATUS_UUID,
   PodCommand,
   PodCommandWithId,
   PodResponse,
-  encodeCommand,
   decodeResponse,
+  encodeCommand,
 } from './protocol';
 
 type NotificationListener = (response: PodResponse) => void;
@@ -58,7 +58,18 @@ class ThePodBluetoothService {
   }
 
   async connect(deviceId: string): Promise<void> {
-    const connected = await this.manager.connectToDevice(deviceId, { requestMTU: 512 });
+    const CONNECT_TIMEOUT = 12000;
+    const timer = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('BLE connect timed out')), CONNECT_TIMEOUT)
+    );
+    await Promise.race([this._connectInternal(deviceId), timer]);
+  }
+
+  private async _connectInternal(deviceId: string): Promise<void> {
+    const connected = await this.manager.connectToDevice(deviceId, {
+      requestMTU: 512,
+      timeout: 10000,
+    });
     await connected.discoverAllServicesAndCharacteristics();
     console.log('[BLE] Negotiated MTU:', connected.mtu);
     this.device = connected;

@@ -209,7 +209,20 @@ class CommandHandler:
         self._send_large({'type': 'QUEUE', '_id': req_id, 'songs': songs, 'index': int(status.get('song', 0))})
 
     def _get_battery(self, cmd, req_id):
-        self._send_small({'type': 'BATTERY', '_id': req_id, 'percent': 100, 'charging': True, 'minutesRemaining': None})
+        from battery import get_battery_info
+        info = get_battery_info()
+        if info:
+            self._send_small({
+                'type': 'BATTERY',
+                '_id': req_id,
+                'percent': info['percent'],
+                'charging': info['charging'],
+                'voltage': info['voltage'],
+                'currentMa': info['current_ma'],
+                'minutesRemaining': None,
+            })
+        else:
+            self._send_small({'type': 'BATTERY', '_id': req_id, 'percent': -1, 'charging': False, 'minutesRemaining': None})
 
     def _get_album_art(self, cmd, req_id):
         import io
