@@ -62,6 +62,9 @@ class CommandHandler:
             'SHUTDOWN': self._shutdown,
             'DELETE_TRACK': self._delete_track,
             'SET_EQ': self._set_eq,
+            'SCAN_WIFI': self._scan_wifi,
+            'CONNECT_WIFI': self._connect_wifi,
+            'GET_WIFI_STATUS': self._get_wifi_status,
         }.get(cmd)
 
         if handler is None:
@@ -339,6 +342,108 @@ class CommandHandler:
             'name': 'ThePod',
             'firmwareVersion': '1.0.0',
         })
+
+    def _scan_wifi(self, cmd, req_id):
+        import re, threading
+
+        def do_scan():
+            try:
+                r = subprocess.run(
+                    ['nmcli', '--terse', '--fields', 'SSID,SIGNAL,SECURITY',
+                     'dev', 'wifi', 'list', '--rescan', 'yes'],
+                    capture_output=True, text=True, timeout=20,
+                )
+                networks = []
+                seen = set()
+                for line in r.stdout.strip().split('\n'):
+                    if not line:
+                        continue
+                    parts = re.split(r'(?<!\\):', line)
+                    ssid = parts[0].replace('\\:', ':').strip() if parts else ''
+                    if not ssid or ssid in seen:
+                        continue
+                    seen.add(ssid)
+                    try:
+                        signal = int(parts[1]) if len(parts) > 1 else 0
+                    except ValueError:
+                        signal = 0
+                    secured = len(parts) > 2 and parts[2].strip() not in ('--', '')
+                    networks.append({'ssid': ssid, 'signal': signal, 'secured': secured})
+                networks.sort(key=lambda x: x['signal'], reverse=True)
+                GLib.idle_add(lambda: self._send_small(
+                    {'type': 'WIFI_SCAN', '_id': req_id, 'networks': networks}
+                ) or False)
+            except Exception as e:
+                GLib.idle_add(lambda: self._send_small(
+                    {'type': 'ERROR', 'cmd': 'SCAN_WIFI', 'msg': str(e), '_id': req_id}
+                ) or False)
+
+        threading.Thread(target=do_scan, daemon=True).start()
+
+    def _connect_wifi(self, cmd, req_id):
+        import re, threading, time
+
+        ssid = cmd.get('ssid', '').strip()
+        password = cmd.get('password', '').strip()
+        if not ssid:
+            self._send_small({'type': 'ERROR', 'cmd': 'CONNECT_WIFI', 'msg': 'No SSID', '_id': req_id})
+            return
+
+        def do_connect():
+            try:
+                # Try existing saved profile first
+                r = subprocess.run(['nmcli', 'con', 'up', ssid],
+                                   capture_output=True, text=True, timeout=30)
+                if r.returncode != 0:
+                    args = ['nmcli', 'dev', 'wifi', 'connect', ssid]
+                    if password:
+                        args += ['password', password]
+                    r = subprocess.run(args, capture_output=True, text=True, timeout=30)
+
+                if r.returncode == 0:
+                    time.sleep(3)  # wait for DHCP
+                    ip = get_local_ip()
+                    GLib.idle_add(lambda: self._send_small(
+                        {'type': 'WIFI_CONNECTED', '_id': req_id, 'ssid': ssid, 'ip': ip}
+                    ) or False)
+                else:
+                    err = (r.stderr.strip() or r.stdout.strip() or 'Connection failed').split('\n')[0]
+                    GLib.idle_add(lambda: self._send_small(
+                        {'type': 'ERROR', 'cmd': 'CONNECT_WIFI', 'msg': err, '_id': req_id}
+                    ) or False)
+            except subprocess.TimeoutExpired:
+                GLib.idle_add(lambda: self._send_small(
+                    {'type': 'ERROR', 'cmd': 'CONNECT_WIFI', 'msg': 'Connection timed out', '_id': req_id}
+                ) or False)
+            except Exception as e:
+                GLib.idle_add(lambda: self._send_small(
+                    {'type': 'ERROR', 'cmd': 'CONNECT_WIFI', 'msg': str(e), '_id': req_id}
+                ) or False)
+
+        threading.Thread(target=do_connect, daemon=True).start()
+
+    def _get_wifi_status(self, cmd, req_id):
+        import re
+        try:
+            r = subprocess.run(
+                ['nmcli', '--terse', '--fields', 'ACTIVE,SSID,SIGNAL', 'dev', 'wifi'],
+                capture_output=True, text=True, timeout=5,
+            )
+            ssid = ''
+            signal = 0
+            for line in r.stdout.strip().split('\n'):
+                parts = re.split(r'(?<!\\):', line)
+                if parts and parts[0] == 'yes':
+                    ssid = parts[1].replace('\\:', ':').strip() if len(parts) > 1 else ''
+                    try:
+                        signal = int(parts[2]) if len(parts) > 2 else 0
+                    except ValueError:
+                        signal = 0
+                    break
+            ip = get_local_ip()
+            self._send_small({'type': 'WIFI_STATUS', '_id': req_id, 'ssid': ssid, 'ip': ip, 'signal': signal})
+        except Exception as e:
+            self._send_small({'type': 'ERROR', 'cmd': 'GET_WIFI_STATUS', 'msg': str(e), '_id': req_id})
 
     def _push_now_playing(self, req_id):
         status = self.mpd.get_status()

@@ -3,10 +3,12 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -59,6 +61,16 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
   const abortRef = useRef<AbortController | null>(null);
   const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  type WifiNetwork = { ssid: string; signal: number; secured: boolean };
+  const [wifiStatus, setWifiStatus] = useState<{ ssid: string; ip: string; signal: number } | null>(null);
+  const [wifiModal, setWifiModal] = useState(false);
+  const [wifiNetworks, setWifiNetworks] = useState<WifiNetwork[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [selectedNet, setSelectedNet] = useState<WifiNetwork | null>(null);
+  const [wifiPwd, setWifiPwd] = useState('');
+  const [connecting, setConnecting] = useState(false);
+  const [wifiError, setWifiError] = useState<string | null>(null);
+
   useEffect(() => {
     const t = setTimeout(() => {
       podService.request({ cmd: 'GET_STORAGE' }, 10000)
@@ -67,9 +79,53 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
       podService.request({ cmd: 'GET_BATTERY' }, 10000)
         .then(res => { if (res.type === 'BATTERY') setBattery(res); })
         .catch(() => {});
+      podService.request({ cmd: 'GET_WIFI_STATUS' }, 8000)
+        .then(res => { if (res.type === 'WIFI_STATUS') setWifiStatus(res); })
+        .catch(() => {});
     }, 500);
     return () => clearTimeout(t);
   }, []);
+
+  const handleScanWifi = async () => {
+    setScanning(true);
+    setWifiNetworks([]);
+    setSelectedNet(null);
+    setWifiPwd('');
+    setWifiError(null);
+    setWifiModal(true);
+    try {
+      const res = await podService.request({ cmd: 'SCAN_WIFI' }, 25000);
+      if (res.type === 'WIFI_SCAN') setWifiNetworks(res.networks ?? []);
+    } catch {
+      setWifiError('Scan failed');
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const handleConnectWifi = async () => {
+    if (!selectedNet) return;
+    setConnecting(true);
+    setWifiError(null);
+    try {
+      const res = await podService.request(
+        { cmd: 'CONNECT_WIFI', ssid: selectedNet.ssid, password: wifiPwd },
+        35000,
+      );
+      if (res.type === 'WIFI_CONNECTED') {
+        setWifiStatus({ ssid: res.ssid, ip: res.ip, signal: wifiStatus?.signal ?? 0 });
+        setWifiModal(false);
+        setSelectedNet(null);
+        setWifiPwd('');
+      } else {
+        setWifiError(res.msg ?? 'Connection failed');
+      }
+    } catch {
+      setWifiError('Connection timed out');
+    } finally {
+      setConnecting(false);
+    }
+  };
 
   const handleEqPreset = async (preset: EqPreset) => {
     setEqPreset(preset);
@@ -161,6 +217,94 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
         <View style={s.divider} />
         <SpecRow label="Firmware" value="1.0.0" />
       </View>
+
+      {/* WiFi Network */}
+      <Text style={s.sectionTitle}>Network</Text>
+      <View style={s.card}>
+        <View style={s.wifiRow}>
+          <View style={s.wifiInfo}>
+            <Text style={s.rowTitle}>{wifiStatus?.ssid ?? 'Unknown Network'}</Text>
+            <Text style={s.rowSub}>{wifiStatus?.ip ?? 'Getting IP…'}</Text>
+          </View>
+          <View style={[s.signalBadge, { opacity: wifiStatus ? 1 : 0.3 }]}>
+            <Text style={s.signalText}>{wifiStatus ? `${wifiStatus.signal}%` : '—'}</Text>
+          </View>
+        </View>
+        <Pressable style={s.wifiChangeBtn} onPress={handleScanWifi}>
+          <Text style={s.wifiChangeBtnText}>Change Network</Text>
+        </Pressable>
+        <Text style={s.eqNote}>To use iPhone hotspot: enable Personal Hotspot in iPhone Settings first</Text>
+      </View>
+
+      {/* WiFi Modal */}
+      <Modal visible={wifiModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setWifiModal(false)}>
+        <View style={s.modalContainer}>
+          <View style={s.modalHeader}>
+            <Text style={s.modalTitle}>Select Network</Text>
+            <Pressable onPress={() => setWifiModal(false)} hitSlop={16}>
+              <Text style={s.modalClose}>✕</Text>
+            </Pressable>
+          </View>
+
+          {scanning ? (
+            <View style={s.modalCenter}>
+              <ActivityIndicator color={ACCENT} size="large" />
+              <Text style={s.rowSub}>Scanning for networks…</Text>
+            </View>
+          ) : selectedNet ? (
+            <View style={s.modalPwdView}>
+              <Text style={s.modalNetName}>{selectedNet.ssid}</Text>
+              {selectedNet.secured ? (
+                <TextInput
+                  style={s.pwdInput}
+                  placeholder="Password"
+                  placeholderTextColor={TEXT_MUTE}
+                  secureTextEntry
+                  value={wifiPwd}
+                  onChangeText={setWifiPwd}
+                  autoFocus
+                />
+              ) : (
+                <Text style={s.rowSub}>Open network — no password needed</Text>
+              )}
+              {wifiError && <Text style={s.uploadErrorText}>{wifiError}</Text>}
+              <View style={s.modalBtnRow}>
+                <Pressable style={s.modalBackBtn} onPress={() => { setSelectedNet(null); setWifiPwd(''); setWifiError(null); }}>
+                  <Text style={s.modalBackText}>Back</Text>
+                </Pressable>
+                <Pressable
+                  style={[s.modalConnectBtn, connecting && { opacity: 0.5 }]}
+                  onPress={handleConnectWifi}
+                  disabled={connecting}
+                >
+                  {connecting
+                    ? <ActivityIndicator color={BG} size="small" />
+                    : <Text style={s.modalConnectText}>Connect</Text>}
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <FlatList
+              data={wifiNetworks}
+              keyExtractor={item => item.ssid}
+              contentContainerStyle={{ paddingBottom: 40 }}
+              ListEmptyComponent={<Text style={s.emptySub}>No networks found</Text>}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={({ pressed }) => [s.netRow, pressed && { opacity: 0.6 }]}
+                  onPress={() => { setSelectedNet(item); setWifiPwd(''); setWifiError(null); }}
+                >
+                  <View style={s.netInfo}>
+                    <Text style={s.rowTitle}>{item.ssid}</Text>
+                    <Text style={s.rowSub}>{item.secured ? 'Secured' : 'Open'}</Text>
+                  </View>
+                  <Text style={s.netSignal}>{item.signal}%</Text>
+                </Pressable>
+              )}
+            />
+          )}
+        </View>
+      </Modal>
 
       {/* Spotify Connect */}
       <Text style={s.sectionTitle}>Spotify</Text>
@@ -560,5 +704,55 @@ const s = StyleSheet.create({
   emptyState: { alignItems: 'center', paddingTop: 60, gap: 8 },
   emptyIcon: { fontSize: 40, color: TEXT_MUTE },
   emptyText: { color: TEXT, fontSize: 17, fontWeight: '600' },
-  emptySub: { color: TEXT_SEC, fontSize: 14, textAlign: 'center', paddingHorizontal: 20 },
+  emptySub: { color: TEXT_SEC, fontSize: 14, textAlign: 'center', paddingHorizontal: 20, paddingTop: 40 },
+
+  // WiFi section
+  wifiRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  wifiInfo: { flex: 1 },
+  signalBadge: { backgroundColor: SURFACE_HIGH, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
+  signalText: { color: TEXT_SEC, fontSize: 12, fontWeight: '600' },
+  wifiChangeBtn: {
+    paddingVertical: 10, borderRadius: 8,
+    borderWidth: 1, borderColor: SURFACE_HIGH,
+    alignItems: 'center', marginBottom: 10,
+  },
+  wifiChangeBtnText: { color: TEXT, fontSize: 14, fontWeight: '500' },
+
+  // WiFi modal
+  modalContainer: { flex: 1, backgroundColor: BG },
+  modalHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingTop: 24, paddingBottom: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: SURFACE_HIGH,
+  },
+  modalTitle: { color: TEXT, fontSize: 20, fontWeight: '700' },
+  modalClose: { color: TEXT_SEC, fontSize: 18, fontWeight: '600' },
+  modalCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
+  netRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: SURFACE_HIGH,
+  },
+  netInfo: { flex: 1 },
+  netSignal: { color: TEXT_MUTE, fontSize: 13 },
+
+  // Password screen
+  modalPwdView: { padding: 24, gap: 16 },
+  modalNetName: { color: TEXT, fontSize: 20, fontWeight: '700', marginBottom: 4 },
+  pwdInput: {
+    backgroundColor: SURFACE_HIGH, borderRadius: 8, paddingHorizontal: 14,
+    paddingVertical: 12, color: TEXT, fontSize: 16,
+  },
+  modalBtnRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  modalBackBtn: {
+    flex: 1, paddingVertical: 13, borderRadius: 8,
+    borderWidth: 1, borderColor: SURFACE_HIGH, alignItems: 'center',
+  },
+  modalBackText: { color: TEXT_SEC, fontSize: 15, fontWeight: '500' },
+  modalConnectBtn: {
+    flex: 2, paddingVertical: 13, borderRadius: 8,
+    backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center',
+    minHeight: 46,
+  },
+  modalConnectText: { color: TEXT, fontSize: 15, fontWeight: '700' },
 });
