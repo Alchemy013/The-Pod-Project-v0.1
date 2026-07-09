@@ -36,9 +36,9 @@ type EqPreset = 'flat' | 'bass' | 'vocal' | 'treble';
 
 function SpecRow({ label, value }: { label: string; value: string }) {
   return (
-    <View style={styles.specRow}>
-      <Text style={styles.specLabel}>{label}</Text>
-      <Text style={styles.specValue}>{value}</Text>
+    <View style={s.specRow}>
+      <Text style={s.specLabel}>{label}</Text>
+      <Text style={s.specValue}>{value}</Text>
     </View>
   );
 }
@@ -127,73 +127,73 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
   const usedPct = storage ? (storage.usedGB / storage.totalGB) * 100 : 0;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      <Text style={styles.screenTitle}>Pod</Text>
+    <ScrollView style={s.container} contentContainerStyle={s.scrollContent}>
+      <Text style={s.screenTitle}>Pod</Text>
 
-      {/* Connection status */}
-      <View style={styles.connectedCard}>
-        <View style={styles.connectedHeader}>
-          <View style={styles.podIconCircle}>
-            <Text style={styles.podIconText}>◉</Text>
+      {/* Connection status card */}
+      <View style={s.connectedCard}>
+        <View style={s.connectedHeader}>
+          <View style={s.podIconCircle}>
+            <Text style={s.podIconText}>◉</Text>
           </View>
-          <View style={styles.connectedInfo}>
-            <Text style={styles.connectedName}>ThePod</Text>
-            <View style={styles.connectedBadgeRow}>
-              <View style={styles.greenDot} />
-              <Text style={styles.connectedBadge}>Connected via Bluetooth</Text>
+          <View style={s.connectedInfo}>
+            <Text style={s.connectedName}>ThePod</Text>
+            <View style={s.connectedBadgeRow}>
+              <View style={s.greenDot} />
+              <Text style={s.connectedBadge}>Connected via Bluetooth</Text>
             </View>
           </View>
         </View>
       </View>
 
       {/* Hardware specs */}
-      <Text style={styles.sectionTitle}>Hardware</Text>
-      <View style={styles.card}>
+      <Text style={s.sectionTitle}>Hardware</Text>
+      <View style={s.card}>
         <SpecRow label="Device" value="Raspberry Pi Zero 2W" />
-        <View style={styles.divider} />
+        <View style={s.divider} />
         <SpecRow label="Processor" value="ARM Cortex-A53 · 1.0GHz" />
-        <View style={styles.divider} />
+        <View style={s.divider} />
         <SpecRow label="Memory" value="512MB RAM" />
-        <View style={styles.divider} />
+        <View style={s.divider} />
         <SpecRow label="DAC" value="PCM5122 · I2S" />
-        <View style={styles.divider} />
+        <View style={s.divider} />
         <SpecRow label="Output" value="3.5mm Analog" />
-        <View style={styles.divider} />
+        <View style={s.divider} />
         <SpecRow label="Firmware" value="1.0.0" />
       </View>
 
       {/* Equalizer */}
-      <Text style={styles.sectionTitle}>Equalizer</Text>
-      <View style={styles.card}>
-        <View style={styles.eqRow}>
+      <Text style={s.sectionTitle}>Equalizer</Text>
+      <View style={s.card}>
+        <View style={s.eqRow}>
           {(['flat', 'bass', 'vocal', 'treble'] as EqPreset[]).map(preset => (
             <Pressable
               key={preset}
-              style={[styles.eqBtn, eqPreset === preset && styles.eqBtnActive]}
+              style={[s.eqBtn, eqPreset === preset && s.eqBtnActive]}
               onPress={() => handleEqPreset(preset)}
             >
-              <Text style={[styles.eqBtnText, eqPreset === preset && styles.eqBtnTextActive]}>
+              <Text style={[s.eqBtnText, eqPreset === preset && s.eqBtnTextActive]}>
                 {preset.charAt(0).toUpperCase() + preset.slice(1)}
               </Text>
             </Pressable>
           ))}
         </View>
-        <Text style={styles.eqNote}>Requires one-time EQ setup on ThePod</Text>
+        <Text style={s.eqNote}>Requires one-time EQ setup on ThePod</Text>
       </View>
 
       {/* Battery */}
-      <Text style={styles.sectionTitle}>Power</Text>
-      <View style={styles.card}>
+      <Text style={s.sectionTitle}>Power</Text>
+      <View style={s.card}>
         {battery ? (
-          <View style={styles.batteryRow}>
-            <View style={styles.batteryIconWrap}>
-              <View style={styles.batteryIcon}>
-                <View style={[styles.batteryFill, { width: `${battery.percent}%` as any }]} />
+          <View style={s.batteryRow}>
+            <View style={s.batteryIconWrap}>
+              <View style={s.batteryIcon}>
+                <View style={[s.batteryFill, { width: `${battery.percent}%` as any }]} />
               </View>
-              <View style={styles.batteryNub} />
+              <View style={s.batteryNub} />
             </View>
-            <Text style={styles.batteryPct}>{battery.percent}%</Text>
-            <Text style={styles.batteryStatus}>
+            <Text style={s.batteryPct}>{battery.percent}%</Text>
+            <Text style={s.batteryStatus}>
               {battery.charging ? 'Charging' : 'On battery'}
             </Text>
           </View>
@@ -203,14 +203,14 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
       </View>
 
       {/* Storage */}
-      <Text style={styles.sectionTitle}>Storage</Text>
-      <View style={styles.card}>
+      <Text style={s.sectionTitle}>Storage</Text>
+      <View style={s.card}>
         {storage ? (
           <>
-            <View style={styles.storageBar}>
-              <View style={[styles.storageBarFill, { width: `${usedPct}%` as any }]} />
+            <View style={s.storageBar}>
+              <View style={[s.storageBarFill, { width: `${usedPct}%` as any }]} />
             </View>
-            <Text style={styles.storageText}>
+            <Text style={s.storageText}>
               {storage.usedGB} GB used of {storage.totalGB} GB · {storage.trackCount} {storage.trackCount === 1 ? 'track' : 'tracks'}
             </Text>
           </>
@@ -220,18 +220,18 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
       </View>
 
       {/* Upload Music */}
-      <Text style={styles.sectionTitle}>Music</Text>
-      <View style={styles.card}>
+      <Text style={s.sectionTitle}>Music</Text>
+      <View style={s.card}>
         {uploadStep ? (
           <>
-            <ActivityIndicator color={TEXT_SEC} size="small" style={{ marginBottom: 10 }} />
-            <Text style={styles.uploadStatusText}>{uploadStep}</Text>
+            <ActivityIndicator color={ACCENT} size="small" style={{ marginBottom: 10 }} />
+            <Text style={s.uploadStatusText}>{uploadStep}</Text>
           </>
         ) : uploadProgress ? (
           <>
-            <View style={styles.uploadProgressBar}>
+            <View style={s.uploadProgressBar}>
               <View style={[
-                styles.uploadProgressFill,
+                s.uploadProgressFill,
                 {
                   width: `${uploadProgress.bytesTotal > 0
                     ? Math.round((uploadProgress.bytesSent / uploadProgress.bytesTotal) * 100)
@@ -239,35 +239,35 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
                 },
               ]} />
             </View>
-            <Text style={styles.uploadStatusText}>
+            <Text style={s.uploadStatusText}>
               {uploadProgress.index}/{uploadProgress.total} — {uploadProgress.file}
             </Text>
             {uploadProgress.bytesTotal > 0 && (
-              <Text style={styles.uploadPctText}>
+              <Text style={s.uploadPctText}>
                 {Math.round((uploadProgress.bytesSent / uploadProgress.bytesTotal) * 100)}%
               </Text>
             )}
           </>
         ) : uploadSuccess ? (
-          <View style={styles.uploadSuccessRow}>
-            <Text style={styles.uploadSuccessText}>✓ {uploadSuccess}</Text>
+          <View style={s.uploadSuccessRow}>
+            <Text style={s.uploadSuccessText}>✓ {uploadSuccess}</Text>
           </View>
         ) : (
-          <Pressable style={styles.uploadBtn} onPress={handleUpload}>
-            <Text style={styles.uploadBtnText}>+ Add Music from Files</Text>
+          <Pressable style={s.uploadBtn} onPress={handleUpload}>
+            <Text style={s.uploadBtnText}>+ Add Music from Files</Text>
           </Pressable>
         )}
-        {uploadError && <Text style={styles.uploadErrorText}>{uploadError}</Text>}
+        {uploadError && <Text style={s.uploadErrorText}>{uploadError}</Text>}
       </View>
 
       {/* Disconnect */}
-      <Pressable style={styles.disconnectBtn} onPress={onDisconnect}>
-        <Text style={styles.disconnectText}>Disconnect</Text>
+      <Pressable style={s.disconnectBtn} onPress={onDisconnect}>
+        <Text style={s.disconnectText}>Disconnect</Text>
       </Pressable>
 
       {/* Power off */}
       <Pressable
-        style={styles.powerBtn}
+        style={s.powerBtn}
         onPress={() => {
           Alert.alert(
             'Power Off ThePod',
@@ -286,7 +286,7 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
           );
         }}
       >
-        <Text style={styles.powerText}>Power Off Pod</Text>
+        <Text style={s.powerText}>Power Off Pod</Text>
       </Pressable>
     </ScrollView>
   );
@@ -294,8 +294,8 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
 
 function SignalBars({ rssi }: { rssi: number | null }) {
   if (rssi === null) return null;
-  const color = rssi > -60 ? '#32D74B' : rssi > -75 ? '#FFD60A' : '#FF453A';
-  return <Text style={[styles.rssi, { color }]}>{rssi} dBm</Text>;
+  const color = rssi > -60 ? GREEN : rssi > -75 ? '#FFD60A' : '#FF453A';
+  return <Text style={[s.rssi, { color }]}>{rssi} dBm</Text>;
 }
 
 function DeviceRow({ device, isConnected, isConnecting, onPress }: {
@@ -309,17 +309,17 @@ function DeviceRow({ device, isConnected, isConnecting, onPress }: {
 
   return (
     <Pressable
-      style={[styles.deviceRow, isConnected && styles.deviceRowConnected, isPod && styles.deviceRowPod]}
+      style={[s.deviceRow, isConnected && s.deviceRowConnected, isPod && s.deviceRowPod]}
       onPress={onPress}
       disabled={isConnecting}
     >
-      <View style={styles.deviceIcon}>
-        <Text style={styles.deviceIconText}>{isPod ? '◉' : '○'}</Text>
+      <View style={s.deviceIcon}>
+        <Text style={s.deviceIconText}>{isPod ? '◉' : '○'}</Text>
       </View>
-      <View style={styles.deviceInfo}>
-        <Text style={[styles.deviceName, isPod && styles.deviceNamePod]}>{name}</Text>
-        <Text style={styles.deviceId} numberOfLines={1}>{device.id}</Text>
-        {isConnected && <Text style={styles.connectedBadgeGreen}>● Connected</Text>}
+      <View style={s.deviceInfo}>
+        <Text style={[s.deviceName, isPod && s.deviceNamePod]}>{name}</Text>
+        <Text style={s.deviceId} numberOfLines={1}>{device.id}</Text>
+        {isConnected && <Text style={s.connectedBadgeGreen}>● Connected</Text>}
       </View>
       <SignalBars rssi={device.rssi} />
     </Pressable>
@@ -362,40 +362,40 @@ export default function PodScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.screenTitle}>Pod</Text>
+    <SafeAreaView style={s.container}>
+      <Text style={s.screenTitle}>Pod</Text>
 
       {/* Status */}
-      <View style={styles.statusCard}>
-        <View style={styles.statusRow}>
-          <View style={[styles.statusDot, {
-            backgroundColor: isConnecting ? '#FFD60A' : isScanning ? '#FFD60A' : '#2E1F50',
+      <View style={s.statusCard}>
+        <View style={s.statusRow}>
+          <View style={[s.statusDot, {
+            backgroundColor: isConnecting ? '#FFD60A' : isScanning ? ACCENT : TEXT_MUTE,
           }]} />
-          <Text style={styles.statusText}>
+          <Text style={s.statusText}>
             {isConnecting ? 'Connecting…' : isScanning ? 'Scanning…' : 'Not connected'}
           </Text>
         </View>
       </View>
 
       {error && (
-        <View style={styles.errorCard}>
-          <Text style={styles.errorText}>{error}</Text>
+        <View style={s.errorCard}>
+          <Text style={s.errorText}>{error}</Text>
         </View>
       )}
 
       {/* Scan control */}
-      <View style={styles.scanRow}>
-        <Text style={styles.sectionLabel}>
+      <View style={s.scanRow}>
+        <Text style={s.sectionLabel}>
           {isScanning ? 'Scanning for devices…' : `${scannedDevices.length} device${scannedDevices.length !== 1 ? 's' : ''} found`}
         </Text>
         <Pressable
-          style={[styles.scanBtn, (isScanning || isConnecting) && styles.scanBtnDisabled]}
+          style={[s.scanBtn, (isScanning || isConnecting) && s.scanBtnDisabled]}
           onPress={startScan}
           disabled={isScanning || isConnecting}
         >
           {isScanning
             ? <ActivityIndicator color="#fff" size="small" />
-            : <Text style={styles.scanBtnText}>Scan</Text>}
+            : <Text style={s.scanBtnText}>Scan</Text>}
         </Pressable>
       </View>
 
@@ -410,13 +410,13 @@ export default function PodScreen() {
             onPress={() => handleConnect(item)}
           />
         )}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={s.list}
         ListEmptyComponent={
           !isScanning ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>◎</Text>
-              <Text style={styles.emptyText}>No devices found</Text>
-              <Text style={styles.emptySub}>Make sure ThePod is powered on and nearby</Text>
+            <View style={s.emptyState}>
+              <Text style={s.emptyIcon}>◎</Text>
+              <Text style={s.emptyText}>No devices found</Text>
+              <Text style={s.emptySub}>Make sure ThePod is powered on and nearby</Text>
             </View>
           ) : null
         }
@@ -425,28 +425,29 @@ export default function PodScreen() {
   );
 }
 
-const BG = '#080010';
-const SURFACE = '#110820';
-const BORDER = '#2E1F50';
+const BG = '#121212';
+const SURFACE = '#181818';
+const SURFACE_HIGH = '#282828';
 const TEXT = '#FFFFFF';
-const TEXT_SEC = '#9B94B3';
+const TEXT_SEC = '#B3B3B3';
+const TEXT_MUTE = '#535353';
 const GREEN = '#32D74B';
 const ACCENT = '#A855F7';
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   scrollContent: { paddingTop: 60, paddingBottom: 120 },
-  screenTitle: { color: TEXT, fontSize: 32, fontWeight: '700', paddingHorizontal: 20, marginBottom: 20, paddingTop: 16 },
+  screenTitle: { color: TEXT, fontSize: 32, fontWeight: '800', letterSpacing: -0.5, paddingHorizontal: 20, marginBottom: 20, paddingTop: 16 },
 
   connectedCard: {
     marginHorizontal: 20, marginBottom: 24,
-    backgroundColor: SURFACE, borderRadius: 16, padding: 16,
+    backgroundColor: SURFACE, borderRadius: 12, padding: 16,
     borderWidth: 1, borderColor: ACCENT,
   },
   connectedHeader: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   podIconCircle: {
     width: 48, height: 48, borderRadius: 24,
-    backgroundColor: '#1E1030', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: SURFACE_HIGH, alignItems: 'center', justifyContent: 'center',
   },
   podIconText: { fontSize: 22, color: ACCENT },
   connectedInfo: { flex: 1, gap: 4 },
@@ -455,23 +456,27 @@ const styles = StyleSheet.create({
   greenDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: GREEN },
   connectedBadge: { color: GREEN, fontSize: 13, fontWeight: '500' },
 
-  sectionTitle: { color: TEXT_SEC, fontSize: 12, fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase', paddingHorizontal: 20, marginBottom: 8 },
+  sectionTitle: {
+    color: TEXT_SEC, fontSize: 11, fontWeight: '600',
+    letterSpacing: 1.0, textTransform: 'uppercase',
+    paddingHorizontal: 20, marginBottom: 8,
+  },
 
   card: {
     marginHorizontal: 20, marginBottom: 24,
-    backgroundColor: SURFACE, borderRadius: 16, padding: 16,
+    backgroundColor: SURFACE, borderRadius: 12, padding: 16,
   },
   specRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 },
   specLabel: { color: TEXT_SEC, fontSize: 15 },
   specValue: { color: TEXT, fontSize: 15, fontWeight: '500' },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: SURFACE_HIGH },
 
   eqRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  eqBtn: { flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: 'center', backgroundColor: '#1E1030' },
+  eqBtn: { flex: 1, paddingVertical: 9, borderRadius: 8, alignItems: 'center', backgroundColor: SURFACE_HIGH },
   eqBtnActive: { backgroundColor: ACCENT },
   eqBtnText: { color: TEXT_SEC, fontSize: 13, fontWeight: '600' },
-  eqBtnTextActive: { color: '#FFFFFF' },
-  eqNote: { color: '#4A3F6B', fontSize: 11, textAlign: 'center' },
+  eqBtnTextActive: { color: TEXT },
+  eqNote: { color: TEXT_MUTE, fontSize: 11, textAlign: 'center' },
 
   batteryRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   batteryIconWrap: { flexDirection: 'row', alignItems: 'center' },
@@ -485,17 +490,15 @@ const styles = StyleSheet.create({
   batteryPct: { color: TEXT, fontSize: 15, fontWeight: '600' },
   batteryStatus: { color: TEXT_SEC, fontSize: 13 },
 
-  storageBar: { height: 6, backgroundColor: '#1E1030', borderRadius: 3, marginBottom: 10, overflow: 'hidden' },
-  storageBarFill: { height: 6, backgroundColor: ACCENT, borderRadius: 3 },
+  storageBar: { height: 4, backgroundColor: SURFACE_HIGH, borderRadius: 2, marginBottom: 10, overflow: 'hidden' },
+  storageBarFill: { height: 4, backgroundColor: ACCENT, borderRadius: 2 },
   storageText: { color: TEXT_SEC, fontSize: 13 },
 
-  uploadBtn: {
-    paddingVertical: 12, alignItems: 'center',
-  },
+  uploadBtn: { paddingVertical: 12, alignItems: 'center' },
   uploadBtnText: { color: TEXT, fontSize: 15, fontWeight: '500' },
   uploadStatusText: { color: TEXT_SEC, fontSize: 13, textAlign: 'center', marginTop: 2 },
-  uploadPctText: { color: TEXT_SEC, fontSize: 11, textAlign: 'center', marginTop: 4 },
-  uploadProgressBar: { height: 4, backgroundColor: '#1E1030', borderRadius: 2, marginBottom: 8, overflow: 'hidden' },
+  uploadPctText: { color: TEXT_MUTE, fontSize: 11, textAlign: 'center', marginTop: 4 },
+  uploadProgressBar: { height: 4, backgroundColor: SURFACE_HIGH, borderRadius: 2, marginBottom: 8, overflow: 'hidden' },
   uploadProgressFill: { height: 4, backgroundColor: ACCENT, borderRadius: 2 },
   uploadSuccessRow: { paddingVertical: 10, alignItems: 'center' },
   uploadSuccessText: { color: ACCENT, fontSize: 14, fontWeight: '600' },
@@ -503,18 +506,18 @@ const styles = StyleSheet.create({
 
   disconnectBtn: {
     marginHorizontal: 20, marginTop: 8, paddingVertical: 14,
-    backgroundColor: '#2C0A0A', borderRadius: 14, alignItems: 'center',
+    backgroundColor: '#2C0A0A', borderRadius: 12, alignItems: 'center',
     borderWidth: 1, borderColor: '#FF453A33',
   },
   disconnectText: { color: '#FF453A', fontSize: 16, fontWeight: '600' },
   powerBtn: {
     marginHorizontal: 20, marginTop: 10, marginBottom: 8, paddingVertical: 14,
-    borderRadius: 14, alignItems: 'center',
-    borderWidth: 1, borderColor: BORDER,
+    borderRadius: 12, alignItems: 'center',
+    borderWidth: 1, borderColor: SURFACE_HIGH,
   },
-  powerText: { color: '#4A3F6B', fontSize: 15, fontWeight: '500' },
+  powerText: { color: TEXT_MUTE, fontSize: 15, fontWeight: '500' },
 
-  statusCard: { marginHorizontal: 20, marginBottom: 16, backgroundColor: SURFACE, borderRadius: 14, padding: 16 },
+  statusCard: { marginHorizontal: 20, marginBottom: 16, backgroundColor: SURFACE, borderRadius: 12, padding: 16 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   statusDot: { width: 10, height: 10, borderRadius: 5 },
   statusText: { color: TEXT, fontSize: 15, fontWeight: '500' },
@@ -524,25 +527,25 @@ const styles = StyleSheet.create({
 
   scanRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 12 },
   sectionLabel: { color: TEXT_SEC, fontSize: 13 },
-  scanBtn: { paddingHorizontal: 18, paddingVertical: 8, backgroundColor: '#1E1030', borderRadius: 10, minWidth: 64, alignItems: 'center' },
-  scanBtnDisabled: { opacity: 0.5 },
+  scanBtn: { paddingHorizontal: 18, paddingVertical: 8, backgroundColor: SURFACE_HIGH, borderRadius: 8, minWidth: 64, alignItems: 'center' },
+  scanBtnDisabled: { opacity: 0.4 },
   scanBtnText: { color: TEXT, fontSize: 14, fontWeight: '500' },
 
   list: { paddingHorizontal: 20, paddingBottom: 100 },
-  deviceRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: SURFACE, borderRadius: 14, padding: 14, marginBottom: 10, gap: 12 },
+  deviceRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: SURFACE, borderRadius: 12, padding: 14, marginBottom: 8, gap: 12 },
   deviceRowConnected: { borderWidth: 1, borderColor: GREEN },
   deviceRowPod: { borderWidth: 1, borderColor: ACCENT },
-  deviceIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#1E1030', alignItems: 'center', justifyContent: 'center' },
+  deviceIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: SURFACE_HIGH, alignItems: 'center', justifyContent: 'center' },
   deviceIconText: { fontSize: 18, color: TEXT_SEC },
   deviceInfo: { flex: 1, gap: 3 },
   deviceName: { color: TEXT, fontSize: 15, fontWeight: '500' },
   deviceNamePod: { color: TEXT, fontWeight: '700' },
-  deviceId: { color: TEXT_SEC, fontSize: 11 },
+  deviceId: { color: TEXT_MUTE, fontSize: 11 },
   connectedBadgeGreen: { color: GREEN, fontSize: 12, fontWeight: '600', marginTop: 2 },
   rssi: { fontSize: 12, fontWeight: '500' },
 
   emptyState: { alignItems: 'center', paddingTop: 60, gap: 8 },
-  emptyIcon: { fontSize: 40, color: TEXT_SEC },
+  emptyIcon: { fontSize: 40, color: TEXT_MUTE },
   emptyText: { color: TEXT, fontSize: 17, fontWeight: '600' },
   emptySub: { color: TEXT_SEC, fontSize: 14, textAlign: 'center', paddingHorizontal: 20 },
 });

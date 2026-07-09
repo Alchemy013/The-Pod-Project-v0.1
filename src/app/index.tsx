@@ -1,10 +1,11 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   Image,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -37,7 +38,7 @@ function SongRow({ song, isPlaying, onPlay, onDelete }: {
 
   return (
     <Pressable
-      style={[styles.row, isPlaying && styles.rowActive]}
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       onPress={onPlay}
       onLongPress={() => {
         Alert.alert(
@@ -54,7 +55,7 @@ function SongRow({ song, isPlaying, onPlay, onDelete }: {
         <Image source={{ uri: artUri }} style={styles.artwork} resizeMode="cover" />
       ) : (
         <View style={[styles.artwork, styles.artworkPlaceholder]}>
-          {isPlaying && <Text style={styles.playingIndicator}>▶</Text>}
+          {isPlaying && <Text style={styles.playingDot}>▶</Text>}
         </View>
       )}
       <View style={styles.rowInfo}>
@@ -74,7 +75,7 @@ function AlbumCard({ album, onPress }: { album: Album; onPress: () => void }) {
   const artUri = typeof cached === 'string' ? cached : null;
 
   return (
-    <Pressable style={({ pressed }) => [styles.albumCard, pressed && { opacity: 0.65 }]} onPress={onPress}>
+    <Pressable style={({ pressed }) => [styles.albumCard, pressed && { opacity: 0.7 }]} onPress={onPress}>
       {artUri ? (
         <Image source={{ uri: artUri }} style={styles.albumArt} resizeMode="cover" />
       ) : (
@@ -82,7 +83,6 @@ function AlbumCard({ album, onPress }: { album: Album; onPress: () => void }) {
       )}
       <Text style={styles.albumTitle} numberOfLines={2}>{album.title}</Text>
       <Text style={styles.albumSub} numberOfLines={1}>{album.artist}</Text>
-      <Text style={styles.albumCount}>{album.songCount} {album.songCount === 1 ? 'song' : 'songs'}</Text>
     </Pressable>
   );
 }
@@ -90,7 +90,7 @@ function AlbumCard({ album, onPress }: { album: Album; onPress: () => void }) {
 function ArtistRow({ artist, onPress }: { artist: Artist; onPress: () => void }) {
   return (
     <Pressable
-      style={({ pressed }) => [styles.artistRow, pressed && { opacity: 0.6 }]}
+      style={({ pressed }) => [styles.artistRow, pressed && styles.rowPressed]}
       onPress={onPress}
     >
       <View style={styles.artistBubble}>
@@ -98,7 +98,9 @@ function ArtistRow({ artist, onPress }: { artist: Artist; onPress: () => void })
       </View>
       <View style={styles.artistInfo}>
         <Text style={styles.artistName} numberOfLines={1}>{artist.name}</Text>
-        <Text style={styles.artistSub}>{artist.albumCount} {artist.albumCount === 1 ? 'album' : 'albums'} · {artist.songCount} songs</Text>
+        <Text style={styles.artistSub}>
+          {artist.albumCount} {artist.albumCount === 1 ? 'album' : 'albums'} · {artist.songCount} songs
+        </Text>
       </View>
     </Pressable>
   );
@@ -143,16 +145,12 @@ export default function LibraryScreen() {
 
   useEffect(() => {
     if (!isConnected || songs.length === 0) return;
-
     const allCached = songs.every(s => songArtCache.has(s.path));
     if (allCached) { setArtReady(true); return; }
-
     setArtReady(false);
     setLoadingStep('artwork');
-
     let pending = songs.length;
     const done = () => { if (--pending === 0) setArtReady(true); };
-
     songs.forEach(song => {
       if (songArtCache.has(song.path)) { done(); return; }
       songArtCache.set(song.path, null);
@@ -230,50 +228,60 @@ export default function LibraryScreen() {
       {/* Header */}
       <View style={styles.header}>
         {artistFilter ? (
-          <View style={styles.headerBack}>
+          <>
             <Pressable
               onPress={() => setArtistFilter(null)}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              style={({ pressed }) => [{ opacity: pressed ? 0.4 : 1 }]}
+              style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
             >
-              <Text style={styles.backText}>← Artists</Text>
+              <Text style={styles.backLink}>← Artists</Text>
             </Pressable>
             <Text style={styles.screenTitle} numberOfLines={1}>{artistFilter.name}</Text>
-          </View>
+          </>
         ) : (
           <Text style={styles.screenTitle}>Library</Text>
         )}
       </View>
 
-      {/* Tab switcher */}
+      {/* Spotify-style outlined filter chips */}
       {!artistFilter && (
-        <View style={styles.tabBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.chipsScroll}
+          contentContainerStyle={styles.chipsContent}
+        >
           {TABS.map(({ key, label }) => (
             <Pressable
               key={key}
-              style={[styles.tab, activeTab === key && styles.tabActive]}
+              style={[styles.chip, activeTab === key && styles.chipActive]}
               onPress={() => setActiveTab(key)}
             >
-              <Text style={[styles.tabText, activeTab === key && styles.tabTextActive]}>{label}</Text>
+              <Text style={[styles.chipText, activeTab === key && styles.chipTextActive]}>
+                {label}
+              </Text>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
       )}
 
-      {/* Search bar */}
+      {/* Search — songs tab only */}
       {activeTab === 'songs' && !artistFilter && (
         <View style={styles.searchWrap}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search songs, artists, albums…"
-            placeholderTextColor="#4A3F6B"
-            value={query}
-            onChangeText={setQuery}
-            clearButtonMode="while-editing"
-            returnKeyType="search"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+          <View style={styles.searchBar}>
+            <Text style={styles.searchIcon}>⌕</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search songs, artists, albums…"
+              placeholderTextColor={TEXT_MUTE}
+              value={query}
+              onChangeText={setQuery}
+              clearButtonMode="while-editing"
+              returnKeyType="search"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
         </View>
       )}
 
@@ -338,76 +346,87 @@ export default function LibraryScreen() {
   );
 }
 
-const BG = '#080010';
-const SURFACE = '#110820';
-const BORDER = '#2E1F50';
+const BG = '#121212';
+const SURFACE = '#181818';
+const SURFACE_HIGH = '#282828';
 const TEXT = '#FFFFFF';
-const TEXT_SEC = '#9B94B3';
+const TEXT_SEC = '#B3B3B3';
+const TEXT_MUTE = '#535353';
 const ACCENT = '#A855F7';
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG, paddingTop: 60 },
-  center: { flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  center: { flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', gap: 10 },
 
-  header: { paddingHorizontal: 20, marginBottom: 16 },
-  headerBack: { gap: 4 },
-  backText: { color: TEXT_SEC, fontSize: 13, fontWeight: '500' },
-  screenTitle: { color: TEXT, fontSize: 32, fontWeight: '700' },
+  header: { paddingHorizontal: 16, marginBottom: 20 },
+  backLink: { color: TEXT_SEC, fontSize: 13, fontWeight: '500', marginBottom: 6 },
+  screenTitle: { color: TEXT, fontSize: 32, fontWeight: '800', letterSpacing: -0.5 },
 
-  tabBar: {
-    flexDirection: 'row', marginHorizontal: 20, marginBottom: 14,
-    backgroundColor: SURFACE, borderRadius: 12, padding: 3,
+  // Spotify-style horizontal chips
+  chipsScroll: { marginBottom: 12 },
+  chipsContent: { paddingHorizontal: 16, gap: 8, flexDirection: 'row' },
+  chip: {
+    height: 32, paddingHorizontal: 14, borderRadius: 9999,
+    borderWidth: 1, borderColor: '#535353',
+    alignItems: 'center', justifyContent: 'center',
   },
-  tab: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center' },
-  tabActive: { backgroundColor: ACCENT },
-  tabText: { color: TEXT_SEC, fontSize: 13, fontWeight: '600' },
-  tabTextActive: { color: TEXT },
+  chipActive: { backgroundColor: TEXT, borderColor: TEXT },
+  chipText: { color: TEXT, fontSize: 13, fontWeight: '600' },
+  chipTextActive: { color: BG },
 
-  searchWrap: { paddingHorizontal: 20, marginBottom: 12 },
-  searchInput: {
-    backgroundColor: SURFACE, color: TEXT, fontSize: 15,
-    paddingHorizontal: 14, paddingVertical: 10,
-    borderRadius: 12, borderWidth: 1, borderColor: BORDER,
+  // Search bar
+  searchWrap: { paddingHorizontal: 16, marginBottom: 12 },
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: SURFACE_HIGH, borderRadius: 6,
+    paddingHorizontal: 12, paddingVertical: 10,
   },
+  searchIcon: { color: TEXT_SEC, fontSize: 18 },
+  searchInput: { flex: 1, color: TEXT, fontSize: 15 },
 
-  list: { paddingHorizontal: 20, paddingBottom: 100 },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: BORDER },
-  rowActive: { backgroundColor: 'rgba(168, 85, 247, 0.1)', borderRadius: 8 },
-  artwork: { width: 44, height: 44, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 12, overflow: 'hidden' },
-  artworkPlaceholder: { backgroundColor: '#1E1030' },
-  playingIndicator: { color: ACCENT, fontSize: 11 },
-  rowInfo: { flex: 1, gap: 2, marginRight: 8 },
-  rowTitle: { color: TEXT, fontSize: 15, fontWeight: '500' },
+  // Song rows — Spotify flat, no separators
+  list: { paddingHorizontal: 16, paddingBottom: 100 },
+  row: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 8, gap: 12,
+  },
+  rowPressed: { opacity: 0.6 },
+  artwork: { width: 48, height: 48, borderRadius: 4, overflow: 'hidden' },
+  artworkPlaceholder: { backgroundColor: SURFACE_HIGH, alignItems: 'center', justifyContent: 'center' },
+  playingDot: { color: ACCENT, fontSize: 10 },
+  rowInfo: { flex: 1, gap: 3 },
+  rowTitle: { color: TEXT, fontSize: 14, fontWeight: '400' },
   rowTitleActive: { color: ACCENT },
-  rowSub: { color: TEXT_SEC, fontSize: 13 },
-  duration: { color: TEXT_SEC, fontSize: 13, flexShrink: 0 },
+  rowSub: { color: TEXT_SEC, fontSize: 12 },
+  duration: { color: TEXT_MUTE, fontSize: 12, fontVariant: ['tabular-nums'] },
 
-  albumGrid: { paddingHorizontal: 12, paddingBottom: 100 },
-  albumRow: { justifyContent: 'space-between', marginBottom: 4 },
-  albumCard: { width: '48%', marginHorizontal: 4, marginBottom: 20 },
-  albumArt: { width: '100%', aspectRatio: 1, borderRadius: 12, marginBottom: 8, backgroundColor: '#1E1030' },
-  albumTitle: { color: TEXT, fontSize: 14, fontWeight: '600', marginBottom: 2 },
-  albumSub: { color: TEXT_SEC, fontSize: 12, marginBottom: 2 },
-  albumCount: { color: '#4A3F6B', fontSize: 11 },
+  // Album grid
+  albumGrid: { paddingHorizontal: 16, paddingBottom: 100 },
+  albumRow: { gap: 16, marginBottom: 24 },
+  albumCard: { flex: 1 },
+  albumArt: { width: '100%', aspectRatio: 1, borderRadius: 4, marginBottom: 10, backgroundColor: SURFACE_HIGH },
+  albumTitle: { color: TEXT, fontSize: 14, fontWeight: '700', marginBottom: 3, lineHeight: 20 },
+  albumSub: { color: TEXT_SEC, fontSize: 12 },
 
+  // Artist rows
   artistRow: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingVertical: 10, paddingHorizontal: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderColor: BORDER,
+    paddingVertical: 10, paddingHorizontal: 16,
   },
   artistBubble: {
-    width: 48, height: 48, borderRadius: 24,
-    backgroundColor: '#1E1030', alignItems: 'center', justifyContent: 'center',
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: SURFACE_HIGH, alignItems: 'center', justifyContent: 'center',
   },
-  artistInitial: { color: ACCENT, fontSize: 18, fontWeight: '700' },
+  artistInitial: { color: TEXT_SEC, fontSize: 22, fontWeight: '700' },
   artistInfo: { flex: 1 },
-  artistName: { color: TEXT, fontSize: 15, fontWeight: '500', marginBottom: 2 },
-  artistSub: { color: TEXT_SEC, fontSize: 13 },
+  artistName: { color: TEXT, fontSize: 15, fontWeight: '600', marginBottom: 3 },
+  artistSub: { color: TEXT_SEC, fontSize: 12 },
 
-  emptyIcon: { fontSize: 40, color: TEXT_SEC },
-  emptyTitle: { color: TEXT, fontSize: 17, fontWeight: '600' },
-  emptySub: { color: TEXT_SEC, fontSize: 14, textAlign: 'center', paddingHorizontal: 40, paddingTop: 40 },
-  loadingText: { color: TEXT_SEC, fontSize: 14, marginTop: 12 },
-  retryBtn: { marginTop: 16, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: SURFACE, borderRadius: 10 },
-  retryText: { color: TEXT, fontSize: 15, fontWeight: '500' },
+  // States
+  emptyIcon: { fontSize: 40, color: TEXT_MUTE },
+  emptyTitle: { color: TEXT, fontSize: 18, fontWeight: '700' },
+  emptySub: { color: TEXT_SEC, fontSize: 14, textAlign: 'center', paddingHorizontal: 40, paddingTop: 48 },
+  loadingText: { color: TEXT_SEC, fontSize: 14, marginTop: 16 },
+  retryBtn: { marginTop: 16, paddingHorizontal: 28, paddingVertical: 12, backgroundColor: TEXT, borderRadius: 9999 },
+  retryText: { color: BG, fontSize: 15, fontWeight: '700' },
 });

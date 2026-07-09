@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   FlatList, Image, Modal, PanResponder, Pressable,
-  ScrollView, StyleSheet, Text, View,
+  ScrollView, StyleSheet, Text, useWindowDimensions, View,
 } from 'react-native';
 import Animated, {
   useAnimatedStyle, useSharedValue, withTiming, Easing,
@@ -15,11 +15,13 @@ import { fetchLyrics, LyricLine } from '@/services/lyrics/LyricsService';
 
 type LyricsState = 'idle' | 'loading' | 'found' | 'not_found' | 'error';
 
-const BG = '#080010';
+const BG = '#121212';
+const SURFACE = '#181818';
+const SURFACE_HIGH = '#282828';
 const TEXT = '#FFFFFF';
-const TEXT_SEC = '#9B94B3';
+const TEXT_SEC = '#B3B3B3';
+const TEXT_MUTE = '#535353';
 const ACCENT = '#A855F7';
-const SURFACE = '#1E1030';
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -35,49 +37,46 @@ function formatSampleRate(sr: number): string {
 function SeekBar({ position, duration, onSeek }: {
   position: number; duration: number; onSeek: (s: number) => void;
 }) {
+  const [dragging, setDragging] = useState(false);
   const [dragPos, setDragPos] = useState<number | null>(null);
   const trackWidth = useRef(0);
   const displayPos = dragPos ?? position;
   const progress = duration > 0 ? Math.min(displayPos / duration, 1) : 0;
   const clamp = (x: number) => Math.min(Math.max((x / trackWidth.current) * duration, 0), duration);
+
   return (
-    <View style={styles.seekContainer}>
+    <View style={s.seekContainer}>
       <View
-        style={styles.seekTrack}
+        style={s.seekHit}
         onLayout={(e) => { trackWidth.current = e.nativeEvent.layout.width; }}
         onStartShouldSetResponder={() => duration > 0}
         onMoveShouldSetResponder={() => duration > 0}
-        onResponderGrant={(e) => setDragPos(clamp(e.nativeEvent.locationX))}
+        onResponderGrant={(e) => { setDragging(true); setDragPos(clamp(e.nativeEvent.locationX)); }}
         onResponderMove={(e) => setDragPos(clamp(e.nativeEvent.locationX))}
-        onResponderRelease={(e) => { const p = clamp(e.nativeEvent.locationX); setDragPos(null); onSeek(p); }}
+        onResponderRelease={(e) => {
+          const p = clamp(e.nativeEvent.locationX);
+          setDragging(false);
+          setDragPos(null);
+          onSeek(p);
+        }}
       >
-        <View style={styles.seekGroove} />
-        <View style={[styles.seekFill, { width: `${progress * 100}%` }]} />
-        <View style={[styles.seekThumb, { left: `${progress * 100}%` as any }]} />
+        <View style={s.seekTrack}>
+          <View style={[s.seekFill, { width: `${progress * 100}%` }]} />
+          <View style={[s.seekThumb, { left: `${progress * 100}%` as any, opacity: dragging ? 1 : 0 }]} />
+        </View>
       </View>
-      <View style={styles.seekLabels}>
-        <Text style={styles.seekTime}>{formatTime(displayPos)}</Text>
-        <Text style={styles.seekTime}>−{formatTime(Math.max(0, duration - displayPos))}</Text>
+      <View style={s.seekLabels}>
+        <Text style={s.seekTime}>{formatTime(displayPos)}</Text>
+        <Text style={s.seekTime}>−{formatTime(Math.max(0, duration - displayPos))}</Text>
       </View>
     </View>
   );
 }
 
-function Btn({ onPress, large = false, children }: {
-  onPress: () => void; large?: boolean; children: React.ReactNode;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
-      style={({ pressed }) => [styles.btn, large && styles.btnLg, pressed && { opacity: 0.4 }]}
-    >
-      {children}
-    </Pressable>
-  );
-}
-
 export default function NowPlayingScreen() {
+  const { width } = useWindowDimensions();
+  const artSize = width - 64;
+
   const router = useRouter();
   const {
     song, playbackState, position, duration, volume,
@@ -94,7 +93,7 @@ export default function NowPlayingScreen() {
 
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lyricsRef = useRef<ScrollView>(null);
-  const LINE_H = 48;
+  const LINE_H = 52;
 
   const { connectionState } = useBluetoothStore();
   const isConnected = connectionState === 'connected';
@@ -107,7 +106,7 @@ export default function NowPlayingScreen() {
   const artCache = useRef<Map<string, string>>(new Map());
   const artInFlight = useRef<string | null>(null);
 
-  const artScale = useSharedValue(0.92);
+  const artScale = useSharedValue(0.93);
   const artStyle = useAnimatedStyle(() => ({
     transform: [{ scale: artScale.value }],
   }));
@@ -145,8 +144,8 @@ export default function NowPlayingScreen() {
   }, [playbackState, duration]);
 
   useEffect(() => {
-    artScale.value = withTiming(playbackState === 'playing' ? 1 : 0.92, {
-      duration: 400, easing: Easing.out(Easing.cubic),
+    artScale.value = withTiming(playbackState === 'playing' ? 1 : 0.93, {
+      duration: 300, easing: Easing.out(Easing.cubic),
     });
   }, [playbackState]);
 
@@ -195,7 +194,7 @@ export default function NowPlayingScreen() {
       if (lyrics[i].time <= displayPosition) idx = i;
     }
     if (idx >= 0) {
-      lyricsRef.current?.scrollTo({ y: Math.max(0, idx * LINE_H - 120), animated: true });
+      lyricsRef.current?.scrollTo({ y: Math.max(0, idx * LINE_H - 140), animated: true });
     }
   }, [displayPosition, showLyrics, lyrics]);
 
@@ -214,10 +213,10 @@ export default function NowPlayingScreen() {
 
   if (!isConnected) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.emptyIcon}>◎</Text>
-        <Text style={styles.emptyTitle}>Not Connected</Text>
-        <Text style={styles.emptySub}>Connect to your Pod in the Pod tab</Text>
+      <View style={s.center}>
+        <Text style={s.emptyIcon}>◎</Text>
+        <Text style={s.emptyTitle}>Not Connected</Text>
+        <Text style={s.emptySub}>Connect to your Pod in the Pod tab</Text>
       </View>
     );
   }
@@ -228,58 +227,58 @@ export default function NowPlayingScreen() {
   if (song?.sampleRate && song.sampleRate > 0) qualityParts.push(formatSampleRate(song.sampleRate));
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.headerRow}>
-        <Text style={styles.screenLabel}>Now Playing</Text>
-        <View style={styles.headerActions}>
+    <View style={s.container}>
+      {/* Top bar — actions only, minimal */}
+      <View style={s.topBar}>
+        <View style={s.topBarLeft} />
+        <View style={s.topBarRight}>
           {lyricsState !== 'idle' && (
             <Pressable
               onPress={() => setShowLyrics(v => !v)}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              style={({ pressed }) => [{ opacity: pressed ? 0.4 : 1 }]}
+              hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+              style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
             >
               <SymbolView
                 name="quote.bubble"
-                style={styles.symSm}
+                style={s.actionIcon}
                 type="monochrome"
-                tintColor={showLyrics ? ACCENT : lyricsState === 'found' ? TEXT_SEC : '#2E1F50'}
+                tintColor={showLyrics ? ACCENT : lyricsState === 'found' ? TEXT_SEC : TEXT_MUTE}
               />
             </Pressable>
           )}
           <Pressable
             onPress={() => { loadQueue(); setShowQueue(true); }}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            style={({ pressed }) => [{ opacity: pressed ? 0.4 : 1 }]}
+            hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+            style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
           >
-            <SymbolView name="list.bullet" style={styles.symSm} type="monochrome" tintColor={TEXT_SEC} />
+            <SymbolView name="list.bullet" style={s.actionIcon} type="monochrome" tintColor={TEXT_SEC} />
           </Pressable>
         </View>
       </View>
 
-      {/* Artwork / Lyrics */}
-      <Animated.View style={[styles.artworkWrap, artStyle]} {...swipe.panHandlers}>
+      {/* Artwork — Spotify full-width */}
+      <Animated.View style={[{ width: artSize, height: artSize, alignSelf: 'center', marginBottom: 28, borderRadius: 8, overflow: 'hidden' }, artStyle]} {...swipe.panHandlers}>
         {showLyrics ? (
           lyricsState === 'loading' ? (
-            <View style={styles.lyricsCenter}>
-              <Text style={styles.lyricsMeta}>Searching for lyrics…</Text>
+            <View style={[s.lyricsBox, { width: artSize, height: artSize }]}>
+              <Text style={s.lyricsMeta}>Searching for lyrics…</Text>
             </View>
           ) : lyricsState === 'not_found' ? (
-            <View style={styles.lyricsCenter}>
-              <Text style={styles.lyricsMeta}>No lyrics found for this track</Text>
+            <View style={[s.lyricsBox, { width: artSize, height: artSize }]}>
+              <Text style={s.lyricsMeta}>No lyrics found for this track</Text>
             </View>
           ) : lyricsState === 'error' ? (
-            <View style={styles.lyricsCenter}>
-              <Text style={styles.lyricsMeta}>Couldn't load lyrics</Text>
-              <Text style={[styles.lyricsMeta, { fontSize: 12, marginTop: 6 }]}>
+            <View style={[s.lyricsBox, { width: artSize, height: artSize }]}>
+              <Text style={s.lyricsMeta}>Couldn't load lyrics</Text>
+              <Text style={[s.lyricsMeta, { fontSize: 12, marginTop: 6 }]}>
                 Make sure cellular data is on — ThePod WiFi has no internet
               </Text>
             </View>
           ) : (
-            <ScrollView ref={lyricsRef} style={styles.lyricsScroll} showsVerticalScrollIndicator={false}>
-              <View style={{ paddingVertical: 24 }}>
+            <ScrollView ref={lyricsRef} style={{ flex: 1, backgroundColor: SURFACE }} showsVerticalScrollIndicator={false}>
+              <View style={{ paddingVertical: 32, paddingHorizontal: 16 }}>
                 {lyrics.map((line, i) => (
-                  <Text key={i} style={[styles.lyricLine, i === activeLyricIdx && styles.lyricLineActive]}>
+                  <Text key={i} style={[s.lyricLine, i === activeLyricIdx && s.lyricLineActive]}>
                     {line.text}
                   </Text>
                 ))}
@@ -287,61 +286,93 @@ export default function NowPlayingScreen() {
             </ScrollView>
           )
         ) : (
-          <>
-            {artUri ? (
-              <Image source={{ uri: artUri }} style={styles.artwork} resizeMode="cover" />
-            ) : (
-              <View style={[styles.artwork, styles.artworkPlaceholder]} />
-            )}
-          </>
+          artUri
+            ? <Image source={{ uri: artUri }} style={{ width: artSize, height: artSize }} resizeMode="cover" />
+            : <View style={[{ width: artSize, height: artSize }, s.artPlaceholder]} />
         )}
       </Animated.View>
 
-      {/* Song Info + Quality Badge */}
-      <View style={styles.info}>
-        <Text style={styles.title} numberOfLines={1}>{song?.title ?? 'Nothing Playing'}</Text>
-        <Text style={styles.artist} numberOfLines={1}>{song?.artist ?? '—'}</Text>
-        <Text style={styles.album} numberOfLines={1}>{song?.album ?? '—'}</Text>
+      {/* Song info row — title + artist left, heart right */}
+      <View style={s.infoRow}>
+        <View style={s.infoText}>
+          <Text style={s.songTitle} numberOfLines={1}>{song?.title ?? 'Nothing Playing'}</Text>
+          <Text style={s.songArtist} numberOfLines={1}>{song?.artist ?? '—'}</Text>
+        </View>
         {qualityParts.length > 0 && (
-          <View style={styles.qualityBadge}>
-            <Text style={styles.qualityText}>{qualityParts.join(' · ')}</Text>
+          <View style={s.qualityBadge}>
+            <Text style={s.qualityText}>{qualityParts[0]}</Text>
           </View>
         )}
       </View>
 
-      {/* Seek */}
-      <SeekBar position={displayPosition} duration={duration} onSeek={(s) => { setDisplayPosition(s); seek(s); }} />
+      {/* Seek bar */}
+      <SeekBar
+        position={displayPosition}
+        duration={duration}
+        onSeek={(p) => { setDisplayPosition(p); seek(p); }}
+      />
 
-      {/* Transport */}
-      <View style={styles.transport}>
-        <Btn onPress={toggleShuffle}>
-          <SymbolView name="shuffle" style={styles.symSm} type="monochrome" tintColor={shuffle ? ACCENT : '#4A3F6B'} />
-        </Btn>
-        <Btn onPress={previous}>
-          <SymbolView name="backward.fill" style={styles.symSm} type="monochrome" tintColor={ACCENT} />
-        </Btn>
-        <Btn onPress={() => seek(Math.max(0, displayPosition - 15))}>
-          <SymbolView name="gobackward.15" style={styles.symSm} type="monochrome" tintColor={ACCENT} />
-        </Btn>
-        <Btn large onPress={isPlaying ? pause : play}>
-          <SymbolView name={isPlaying ? 'pause.fill' : 'play.fill'} style={styles.symLg} type="monochrome" tintColor={ACCENT} />
-        </Btn>
-        <Btn onPress={() => seek(Math.min(duration, displayPosition + 15))}>
-          <SymbolView name="goforward.15" style={styles.symSm} type="monochrome" tintColor={ACCENT} />
-        </Btn>
-        <Btn onPress={next}>
-          <SymbolView name="forward.fill" style={styles.symSm} type="monochrome" tintColor={ACCENT} />
-        </Btn>
-        <Btn onPress={cycleRepeat}>
-          <SymbolView name={repeat === 'one' ? 'repeat.1' : 'repeat'} style={styles.symSm} type="monochrome" tintColor={repeat !== 'off' ? ACCENT : '#4A3F6B'} />
-        </Btn>
+      {/* Transport — Spotify layout: shuffle | ⏮ | ▶circle | ⏭ | repeat */}
+      <View style={s.transport}>
+        <Pressable
+          onPress={toggleShuffle}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+        >
+          <SymbolView name="shuffle" style={s.transportIcon} type="monochrome"
+            tintColor={shuffle ? ACCENT : TEXT_SEC} />
+          {shuffle && <View style={s.activeDot} />}
+        </Pressable>
+
+        <Pressable
+          onPress={previous}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+        >
+          <SymbolView name="backward.fill" style={s.transportIcon} type="monochrome" tintColor={TEXT} />
+        </Pressable>
+
+        {/* Spotify-style circular play button */}
+        <Pressable
+          onPress={isPlaying ? pause : play}
+          style={({ pressed }) => [s.playCircle, pressed && { transform: [{ scale: 0.94 }] }]}
+        >
+          <SymbolView
+            name={isPlaying ? 'pause.fill' : 'play.fill'}
+            style={s.playIcon}
+            type="monochrome"
+            tintColor="#FFFFFF"
+          />
+        </Pressable>
+
+        <Pressable
+          onPress={next}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+        >
+          <SymbolView name="forward.fill" style={s.transportIcon} type="monochrome" tintColor={TEXT} />
+        </Pressable>
+
+        <Pressable
+          onPress={cycleRepeat}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+        >
+          <SymbolView
+            name={repeat === 'one' ? 'repeat.1' : 'repeat'}
+            style={s.transportIcon}
+            type="monochrome"
+            tintColor={repeat !== 'off' ? ACCENT : TEXT_SEC}
+          />
+          {repeat !== 'off' && <View style={s.activeDot} />}
+        </Pressable>
       </View>
 
       {/* Volume */}
-      <View style={styles.volumeRow}>
-        <SymbolView name="speaker.fill" style={styles.symVol} type="monochrome" tintColor="#4A3F6B" />
+      <View style={s.volumeRow}>
+        <SymbolView name="speaker.fill" style={s.volIcon} type="monochrome" tintColor={TEXT_MUTE} />
         <View
-          style={styles.volHit}
+          style={s.volHit}
           onLayout={(e) => { volumeTrackWidth.current = e.nativeEvent.layout.width; }}
           onStartShouldSetResponder={() => true}
           onMoveShouldSetResponder={() => true}
@@ -349,25 +380,47 @@ export default function NowPlayingScreen() {
           onResponderMove={(e) => handleVolumeChange(e.nativeEvent.locationX)}
           onResponderRelease={(e) => handleVolumeChange(e.nativeEvent.locationX)}
         >
-          <View style={styles.volTrack}>
-            <View style={[styles.volFill, { width: `${localVolume}%` }]} />
+          <View style={s.volTrack}>
+            <View style={[s.volFill, { width: `${localVolume}%` }]} />
           </View>
         </View>
-        <SymbolView name="speaker.wave.3.fill" style={styles.symVol} type="monochrome" tintColor="#4A3F6B" />
+        <SymbolView name="speaker.wave.3.fill" style={s.volIcon} type="monochrome" tintColor={TEXT_MUTE} />
       </View>
 
-      {/* Queue Modal */}
+      {/* Skip ±15 row */}
+      <View style={s.skipRow}>
+        <Pressable
+          onPress={() => seek(Math.max(0, displayPosition - 15))}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+        >
+          <SymbolView name="gobackward.15" style={s.skipIcon} type="monochrome" tintColor={TEXT_MUTE} />
+        </Pressable>
+        <Pressable
+          onPress={() => seek(Math.min(duration, displayPosition + 15))}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+        >
+          <SymbolView name="goforward.15" style={s.skipIcon} type="monochrome" tintColor={TEXT_MUTE} />
+        </Pressable>
+      </View>
+
+      {/* Queue modal */}
       <Modal visible={showQueue} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowQueue(false)}>
-        <View style={qStyles.sheet}>
-          <View style={qStyles.handle} />
-          <View style={qStyles.titleRow}>
-            <Text style={qStyles.sheetTitle}>Queue</Text>
-            <Pressable onPress={() => setShowQueue(false)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}>
-              <SymbolView name="xmark.circle.fill" style={{ width: 24, height: 24 }} type="monochrome" tintColor="#4A3F6B" />
+        <View style={q.sheet}>
+          <View style={q.handle} />
+          <View style={q.titleRow}>
+            <Text style={q.sheetTitle}>Queue</Text>
+            <Pressable
+              onPress={() => setShowQueue(false)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+            >
+              <SymbolView name="xmark.circle.fill" style={{ width: 24, height: 24 }} type="monochrome" tintColor={TEXT_MUTE} />
             </Pressable>
           </View>
           {queue.length === 0 ? (
-            <View style={qStyles.empty}><Text style={qStyles.emptyText}>Queue is empty</Text></View>
+            <View style={q.empty}><Text style={q.emptyText}>Queue is empty</Text></View>
           ) : (
             <FlatList
               data={queue}
@@ -378,19 +431,19 @@ export default function NowPlayingScreen() {
                 const active = index === queueIndex;
                 return (
                   <Pressable
-                    style={({ pressed }) => [qStyles.row, active && qStyles.rowActive, pressed && { opacity: 0.6 }]}
+                    style={({ pressed }) => [q.row, active && q.rowActive, pressed && { opacity: 0.6 }]}
                     onPress={() => { playSong(item.path); setShowQueue(false); }}
                   >
-                    <View style={qStyles.indexCol}>
+                    <View style={q.indexCol}>
                       {active
                         ? <SymbolView name="speaker.wave.2.fill" style={{ width: 14, height: 14 }} type="monochrome" tintColor={ACCENT} />
-                        : <Text style={qStyles.indexText}>{index + 1}</Text>}
+                        : <Text style={q.indexText}>{index + 1}</Text>}
                     </View>
-                    <View style={qStyles.songInfo}>
-                      <Text style={[qStyles.songTitle, active && qStyles.songTitleActive]} numberOfLines={1}>{item.title}</Text>
-                      <Text style={qStyles.songArtist} numberOfLines={1}>{item.artist}</Text>
+                    <View style={q.songInfo}>
+                      <Text style={[q.songTitle, active && q.songTitleActive]} numberOfLines={1}>{item.title}</Text>
+                      <Text style={q.songArtist} numberOfLines={1}>{item.artist}</Text>
                     </View>
-                    <Text style={qStyles.dur}>{formatTime(item.duration)}</Text>
+                    <Text style={q.dur}>{formatTime(item.duration)}</Text>
                   </Pressable>
                 );
               }}
@@ -402,75 +455,101 @@ export default function NowPlayingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG, paddingTop: 60, paddingHorizontal: 28, alignItems: 'center' },
-  center: { flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', gap: 8 },
-
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 20 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  screenLabel: { color: TEXT_SEC, fontSize: 12, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase' },
-
-  artworkWrap: { width: 300, height: 300, marginBottom: 28, borderRadius: 16, overflow: 'hidden' },
-  artwork: {
-    width: 300, height: 300, borderRadius: 16,
-    shadowColor: ACCENT, shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.5, shadowRadius: 32, elevation: 24,
+const s = StyleSheet.create({
+  container: {
+    flex: 1, backgroundColor: BG,
+    paddingTop: 52, paddingHorizontal: 32,
   },
-  artworkPlaceholder: { backgroundColor: '#1E1030' },
+  center: { flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', gap: 10 },
 
-  lyricsScroll: { flex: 1, width: '100%' },
-  lyricsCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
-  lyricsMeta: { color: '#4A3F6B', fontSize: 14, textAlign: 'center' },
-  lyricLine: { color: '#4A3F6B', fontSize: 17, fontWeight: '500', textAlign: 'center', lineHeight: 48, paddingHorizontal: 8 },
-  lyricLineActive: { color: ACCENT, fontSize: 18, fontWeight: '700' },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  topBarLeft: { flex: 1 },
+  topBarRight: { flexDirection: 'row', alignItems: 'center', gap: 20 },
+  actionIcon: { width: 22, height: 22 },
 
-  info: { width: '100%', alignItems: 'center', marginBottom: 20, gap: 3 },
-  title: { color: TEXT, fontSize: 20, fontWeight: '700', textAlign: 'center' },
-  artist: { color: TEXT_SEC, fontSize: 16, textAlign: 'center' },
-  album: { color: '#4A3F6B', fontSize: 13, textAlign: 'center' },
-  qualityBadge: { marginTop: 6, flexDirection: 'row', paddingHorizontal: 10, paddingVertical: 4, backgroundColor: SURFACE, borderRadius: 6 },
-  qualityText: { color: TEXT_SEC, fontSize: 11, fontWeight: '600', letterSpacing: 0.4 },
+  artPlaceholder: { backgroundColor: SURFACE_HIGH },
 
-  seekContainer: { width: '100%', marginBottom: 24 },
-  seekTrack: { height: 28, justifyContent: 'center', marginBottom: 6, position: 'relative' },
-  seekGroove: { height: 3, backgroundColor: '#2E1F50', borderRadius: 1.5, position: 'absolute', left: 0, right: 0, top: '50%' as any, transform: [{ translateY: -1.5 }] },
-  seekFill: { height: 3, backgroundColor: ACCENT, borderRadius: 1.5, position: 'absolute', left: 0, top: '50%', transform: [{ translateY: -1.5 }] },
-  seekThumb: { width: 12, height: 12, borderRadius: 6, backgroundColor: ACCENT, position: 'absolute', top: '50%', marginLeft: -6, transform: [{ translateY: -6 }] },
+  lyricsBox: { backgroundColor: SURFACE, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  lyricsMeta: { color: TEXT_MUTE, fontSize: 14, textAlign: 'center' },
+  lyricLine: { color: TEXT_MUTE, fontSize: 18, fontWeight: '500', textAlign: 'center', lineHeight: 52 },
+  lyricLineActive: { color: TEXT, fontSize: 20, fontWeight: '700' },
+
+  // Info row
+  infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 12 },
+  infoText: { flex: 1 },
+  songTitle: { color: TEXT, fontSize: 22, fontWeight: '700', marginBottom: 4, letterSpacing: -0.3 },
+  songArtist: { color: TEXT_SEC, fontSize: 15, fontWeight: '400' },
+  qualityBadge: {
+    paddingHorizontal: 8, paddingVertical: 4,
+    backgroundColor: SURFACE_HIGH, borderRadius: 4,
+  },
+  qualityText: { color: TEXT_MUTE, fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
+
+  // Seek
+  seekContainer: { marginBottom: 24 },
+  seekHit: { height: 20, justifyContent: 'center', marginBottom: 6 },
+  seekTrack: { height: 4, backgroundColor: '#535353', borderRadius: 2, overflow: 'visible' },
+  seekFill: { height: 4, backgroundColor: ACCENT, borderRadius: 2, position: 'absolute', left: 0, top: 0 },
+  seekThumb: {
+    width: 14, height: 14, borderRadius: 7,
+    backgroundColor: TEXT,
+    position: 'absolute', top: -5, marginLeft: -7,
+  },
   seekLabels: { flexDirection: 'row', justifyContent: 'space-between' },
-  seekTime: { color: TEXT_SEC, fontSize: 12 },
+  seekTime: { color: TEXT_MUTE, fontSize: 11, fontVariant: ['tabular-nums'] },
 
-  transport: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 32 },
-  btn: { padding: 6, borderRadius: 10 },
-  btnLg: { padding: 10 },
+  // Transport
+  transport: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: 28,
+  },
+  transportIcon: { width: 26, height: 26 },
+  playCircle: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: ACCENT,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: ACCENT, shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4, shadowRadius: 20,
+  },
+  playIcon: { width: 30, height: 30 },
+  activeDot: {
+    width: 4, height: 4, borderRadius: 2,
+    backgroundColor: ACCENT, alignSelf: 'center', marginTop: 4,
+  },
 
-  symSm: { width: 24, height: 24 },
-  symLg: { width: 36, height: 36 },
-  symVol: { width: 16, height: 16 },
+  // Skip buttons
+  skipRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    marginBottom: 24, paddingHorizontal: 8,
+  },
+  skipIcon: { width: 20, height: 20 },
 
-  volumeRow: { flexDirection: 'row', alignItems: 'center', width: '100%', gap: 12 },
-  volHit: { flex: 1, height: 32, justifyContent: 'center' },
-  volTrack: { height: 4, backgroundColor: '#2E1F50', borderRadius: 2 },
-  volFill: { height: 4, backgroundColor: ACCENT, borderRadius: 2 },
+  // Volume
+  volumeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  volHit: { flex: 1, height: 28, justifyContent: 'center' },
+  volTrack: { height: 4, backgroundColor: '#535353', borderRadius: 2 },
+  volFill: { height: 4, backgroundColor: TEXT, borderRadius: 2 },
+  volIcon: { width: 16, height: 16 },
 
-  emptyIcon: { fontSize: 40, color: TEXT_SEC },
-  emptyTitle: { color: TEXT, fontSize: 17, fontWeight: '600' },
+  emptyIcon: { fontSize: 40, color: TEXT_MUTE },
+  emptyTitle: { color: TEXT, fontSize: 18, fontWeight: '700' },
   emptySub: { color: TEXT_SEC, fontSize: 14, textAlign: 'center', paddingHorizontal: 40 },
 });
 
-const qStyles = StyleSheet.create({
-  sheet: { flex: 1, backgroundColor: '#0D0820', paddingTop: 12 },
-  handle: { width: 36, height: 4, backgroundColor: '#2E1F50', borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+const q = StyleSheet.create({
+  sheet: { flex: 1, backgroundColor: '#121212', paddingTop: 12 },
+  handle: { width: 36, height: 4, backgroundColor: SURFACE_HIGH, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 8 },
-  sheetTitle: { color: TEXT, fontSize: 17, fontWeight: '700' },
+  sheetTitle: { color: TEXT, fontSize: 18, fontWeight: '700' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { color: '#4A3F6B', fontSize: 15 },
+  emptyText: { color: TEXT_MUTE, fontSize: 14 },
   row: { flexDirection: 'row', alignItems: 'center', height: 64, paddingHorizontal: 20, gap: 14 },
-  rowActive: { backgroundColor: '#1E1030' },
+  rowActive: { backgroundColor: SURFACE },
   indexCol: { width: 24, alignItems: 'center' },
-  indexText: { color: '#4A3F6B', fontSize: 13, fontVariant: ['tabular-nums'] },
+  indexText: { color: TEXT_MUTE, fontSize: 13, fontVariant: ['tabular-nums'] },
   songInfo: { flex: 1 },
-  songTitle: { color: '#9B94B3', fontSize: 15, fontWeight: '500' },
-  songTitleActive: { color: ACCENT },
-  songArtist: { color: '#4A3F6B', fontSize: 13, marginTop: 2 },
-  dur: { color: '#4A3F6B', fontSize: 13, fontVariant: ['tabular-nums'] },
+  songTitle: { color: TEXT_SEC, fontSize: 15, fontWeight: '400' },
+  songTitleActive: { color: TEXT, fontWeight: '600' },
+  songArtist: { color: TEXT_MUTE, fontSize: 12, marginTop: 2 },
+  dur: { color: TEXT_MUTE, fontSize: 12, fontVariant: ['tabular-nums'] },
 });
