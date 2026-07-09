@@ -162,6 +162,19 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
         <SpecRow label="Firmware" value="1.0.0" />
       </View>
 
+      {/* Spotify Connect */}
+      <Text style={s.sectionTitle}>Spotify</Text>
+      <View style={s.card}>
+        <Text style={s.rowTitle}>Spotify Connect</Text>
+        <Text style={s.rowSub}>
+          Open Spotify → tap the speaker icon → choose "ThePod" to stream directly to this device.
+        </Text>
+        <View style={[s.connectedBadgeRow, { marginTop: 12 }]}>
+          <View style={s.greenDot} />
+          <Text style={s.connectedBadge}>Available as Spotify Connect device</Text>
+        </View>
+      </View>
+
       {/* Equalizer */}
       <Text style={s.sectionTitle}>Equalizer</Text>
       <View style={s.card}>
