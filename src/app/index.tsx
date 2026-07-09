@@ -199,7 +199,7 @@ export default function LibraryScreen() {
   if (isLoading || !artReady) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color="#fff" size="large" />
+        <ActivityIndicator color={ACCENT} size="large" />
         <Text style={styles.loadingText}>
           {loadingStep === 'songs' ? 'Loading songs…' : 'Loading artwork…'}
         </Text>
@@ -245,7 +245,7 @@ export default function LibraryScreen() {
         )}
       </View>
 
-      {/* Tab switcher (hidden when inside artist drill-down) */}
+      {/* Tab switcher */}
       {!artistFilter && (
         <View style={styles.tabBar}>
           {TABS.map(({ key, label }) => (
@@ -260,13 +260,13 @@ export default function LibraryScreen() {
         </View>
       )}
 
-      {/* Search bar (Songs tab only) */}
+      {/* Search bar */}
       {activeTab === 'songs' && !artistFilter && (
         <View style={styles.searchWrap}>
           <TextInput
             style={styles.searchInput}
             placeholder="Search songs, artists, albums…"
-            placeholderTextColor="#636366"
+            placeholderTextColor="#4A3F6B"
             value={query}
             onChangeText={setQuery}
             clearButtonMode="while-editing"
@@ -297,7 +297,7 @@ export default function LibraryScreen() {
         />
       )}
 
-      {/* Albums (standalone tab or artist drill-down) */}
+      {/* Albums */}
       {(activeTab === 'albums' || artistFilter) && (
         <FlatList
           data={displayedAlbums}
@@ -338,11 +338,12 @@ export default function LibraryScreen() {
   );
 }
 
-const BG = '#0A0A0A';
-const SURFACE = '#141414';
-const BORDER = '#1E1E1E';
+const BG = '#080010';
+const SURFACE = '#110820';
+const BORDER = '#2E1F50';
 const TEXT = '#FFFFFF';
-const TEXT_SEC = '#8E8E93';
+const TEXT_SEC = '#9B94B3';
+const ACCENT = '#A855F7';
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG, paddingTop: 60 },
@@ -358,7 +359,7 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACE, borderRadius: 12, padding: 3,
   },
   tab: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center' },
-  tabActive: { backgroundColor: '#2C2C2E' },
+  tabActive: { backgroundColor: ACCENT },
   tabText: { color: TEXT_SEC, fontSize: 13, fontWeight: '600' },
   tabTextActive: { color: TEXT },
 
@@ -371,23 +372,23 @@ const styles = StyleSheet.create({
 
   list: { paddingHorizontal: 20, paddingBottom: 100 },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: BORDER },
-  rowActive: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8 },
-  artwork: { width: 44, height: 44, borderRadius: 6, alignItems: 'center', justifyContent: 'center', marginRight: 12, overflow: 'hidden' },
-  artworkPlaceholder: { backgroundColor: '#2C2C2E' },
-  playingIndicator: { color: TEXT, fontSize: 11 },
+  rowActive: { backgroundColor: 'rgba(168, 85, 247, 0.1)', borderRadius: 8 },
+  artwork: { width: 44, height: 44, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 12, overflow: 'hidden' },
+  artworkPlaceholder: { backgroundColor: '#1E1030' },
+  playingIndicator: { color: ACCENT, fontSize: 11 },
   rowInfo: { flex: 1, gap: 2, marginRight: 8 },
   rowTitle: { color: TEXT, fontSize: 15, fontWeight: '500' },
-  rowTitleActive: { color: '#FFFFFF' },
+  rowTitleActive: { color: ACCENT },
   rowSub: { color: TEXT_SEC, fontSize: 13 },
   duration: { color: TEXT_SEC, fontSize: 13, flexShrink: 0 },
 
   albumGrid: { paddingHorizontal: 12, paddingBottom: 100 },
   albumRow: { justifyContent: 'space-between', marginBottom: 4 },
   albumCard: { width: '48%', marginHorizontal: 4, marginBottom: 20 },
-  albumArt: { width: '100%', aspectRatio: 1, borderRadius: 10, marginBottom: 8, backgroundColor: '#2C2C2E' },
+  albumArt: { width: '100%', aspectRatio: 1, borderRadius: 12, marginBottom: 8, backgroundColor: '#1E1030' },
   albumTitle: { color: TEXT, fontSize: 14, fontWeight: '600', marginBottom: 2 },
   albumSub: { color: TEXT_SEC, fontSize: 12, marginBottom: 2 },
-  albumCount: { color: '#636366', fontSize: 11 },
+  albumCount: { color: '#4A3F6B', fontSize: 11 },
 
   artistRow: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
@@ -395,10 +396,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth, borderColor: BORDER,
   },
   artistBubble: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#2C2C2E', alignItems: 'center', justifyContent: 'center',
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: '#1E1030', alignItems: 'center', justifyContent: 'center',
   },
-  artistInitial: { color: TEXT_SEC, fontSize: 18, fontWeight: '600' },
+  artistInitial: { color: ACCENT, fontSize: 18, fontWeight: '700' },
   artistInfo: { flex: 1 },
   artistName: { color: TEXT, fontSize: 15, fontWeight: '500', marginBottom: 2 },
   artistSub: { color: TEXT_SEC, fontSize: 13 },

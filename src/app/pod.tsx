@@ -112,7 +112,6 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
       if (successTimer.current) clearTimeout(successTimer.current);
       successTimer.current = setTimeout(() => setUploadSuccess(null), 4000);
 
-      // Refresh storage badge and music library so new tracks appear immediately
       podService.request({ cmd: 'GET_STORAGE' }, 10000)
         .then(res => { if (res.type === 'STORAGE') setStorage(res); })
         .catch(() => {});
@@ -150,9 +149,9 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
       {/* Hardware specs */}
       <Text style={styles.sectionTitle}>Hardware</Text>
       <View style={styles.card}>
-        <SpecRow label="Device" value="Raspberry Pi 3A+" />
+        <SpecRow label="Device" value="Raspberry Pi Zero 2W" />
         <View style={styles.divider} />
-        <SpecRow label="Processor" value="ARM Cortex-A53 · 1.4GHz" />
+        <SpecRow label="Processor" value="ARM Cortex-A53 · 1.0GHz" />
         <View style={styles.divider} />
         <SpecRow label="Memory" value="512MB RAM" />
         <View style={styles.divider} />
@@ -195,11 +194,11 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
             </View>
             <Text style={styles.batteryPct}>{battery.percent}%</Text>
             <Text style={styles.batteryStatus}>
-              {battery.charging ? 'Powered' : 'On battery'}
+              {battery.charging ? 'Charging' : 'On battery'}
             </Text>
           </View>
         ) : (
-          <ActivityIndicator color="#8E8E93" size="small" />
+          <ActivityIndicator color={TEXT_SEC} size="small" />
         )}
       </View>
 
@@ -216,7 +215,7 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
             </Text>
           </>
         ) : (
-          <ActivityIndicator color="#8E8E93" size="small" />
+          <ActivityIndicator color={TEXT_SEC} size="small" />
         )}
       </View>
 
@@ -225,7 +224,7 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
       <View style={styles.card}>
         {uploadStep ? (
           <>
-            <ActivityIndicator color="#8E8E93" size="small" style={{ marginBottom: 10 }} />
+            <ActivityIndicator color={TEXT_SEC} size="small" style={{ marginBottom: 10 }} />
             <Text style={styles.uploadStatusText}>{uploadStep}</Text>
           </>
         ) : uploadProgress ? (
@@ -370,7 +369,7 @@ export default function PodScreen() {
       <View style={styles.statusCard}>
         <View style={styles.statusRow}>
           <View style={[styles.statusDot, {
-            backgroundColor: isConnecting ? '#FFD60A' : isScanning ? '#FFD60A' : '#3A3A3C',
+            backgroundColor: isConnecting ? '#FFD60A' : isScanning ? '#FFD60A' : '#2E1F50',
           }]} />
           <Text style={styles.statusText}>
             {isConnecting ? 'Connecting…' : isScanning ? 'Scanning…' : 'Not connected'}
@@ -426,12 +425,13 @@ export default function PodScreen() {
   );
 }
 
-const BG = '#0A0A0A';
-const SURFACE = '#141414';
-const BORDER = '#1E1E1E';
+const BG = '#080010';
+const SURFACE = '#110820';
+const BORDER = '#2E1F50';
 const TEXT = '#FFFFFF';
-const TEXT_SEC = '#8E8E93';
+const TEXT_SEC = '#9B94B3';
 const GREEN = '#32D74B';
+const ACCENT = '#A855F7';
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
@@ -441,14 +441,14 @@ const styles = StyleSheet.create({
   connectedCard: {
     marginHorizontal: 20, marginBottom: 24,
     backgroundColor: SURFACE, borderRadius: 16, padding: 16,
-    borderWidth: 1, borderColor: GREEN,
+    borderWidth: 1, borderColor: ACCENT,
   },
   connectedHeader: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   podIconCircle: {
     width: 48, height: 48, borderRadius: 24,
-    backgroundColor: '#2C2C2E', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#1E1030', alignItems: 'center', justifyContent: 'center',
   },
-  podIconText: { fontSize: 22, color: GREEN },
+  podIconText: { fontSize: 22, color: ACCENT },
   connectedInfo: { flex: 1, gap: 4 },
   connectedName: { color: TEXT, fontSize: 17, fontWeight: '700' },
   connectedBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -467,26 +467,26 @@ const styles = StyleSheet.create({
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: BORDER },
 
   eqRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  eqBtn: { flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: 'center', backgroundColor: '#2C2C2E' },
-  eqBtnActive: { backgroundColor: '#FFFFFF' },
-  eqBtnText: { color: '#8E8E93', fontSize: 13, fontWeight: '600' },
-  eqBtnTextActive: { color: '#000000' },
-  eqNote: { color: '#48484A', fontSize: 11, textAlign: 'center' },
+  eqBtn: { flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: 'center', backgroundColor: '#1E1030' },
+  eqBtnActive: { backgroundColor: ACCENT },
+  eqBtnText: { color: TEXT_SEC, fontSize: 13, fontWeight: '600' },
+  eqBtnTextActive: { color: '#FFFFFF' },
+  eqNote: { color: '#4A3F6B', fontSize: 11, textAlign: 'center' },
 
   batteryRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   batteryIconWrap: { flexDirection: 'row', alignItems: 'center' },
   batteryIcon: {
     width: 36, height: 18, borderRadius: 4,
-    borderWidth: 1.5, borderColor: '#8E8E93',
+    borderWidth: 1.5, borderColor: TEXT_SEC,
     padding: 2, overflow: 'hidden',
   },
-  batteryFill: { height: '100%', backgroundColor: GREEN, borderRadius: 2 },
-  batteryNub: { width: 3, height: 8, backgroundColor: '#8E8E93', borderRadius: 1, marginLeft: 2 },
+  batteryFill: { height: '100%', backgroundColor: ACCENT, borderRadius: 2 },
+  batteryNub: { width: 3, height: 8, backgroundColor: TEXT_SEC, borderRadius: 1, marginLeft: 2 },
   batteryPct: { color: TEXT, fontSize: 15, fontWeight: '600' },
   batteryStatus: { color: TEXT_SEC, fontSize: 13 },
 
-  storageBar: { height: 6, backgroundColor: '#2C2C2E', borderRadius: 3, marginBottom: 10, overflow: 'hidden' },
-  storageBarFill: { height: 6, backgroundColor: GREEN, borderRadius: 3 },
+  storageBar: { height: 6, backgroundColor: '#1E1030', borderRadius: 3, marginBottom: 10, overflow: 'hidden' },
+  storageBarFill: { height: 6, backgroundColor: ACCENT, borderRadius: 3 },
   storageText: { color: TEXT_SEC, fontSize: 13 },
 
   uploadBtn: {
@@ -495,10 +495,10 @@ const styles = StyleSheet.create({
   uploadBtnText: { color: TEXT, fontSize: 15, fontWeight: '500' },
   uploadStatusText: { color: TEXT_SEC, fontSize: 13, textAlign: 'center', marginTop: 2 },
   uploadPctText: { color: TEXT_SEC, fontSize: 11, textAlign: 'center', marginTop: 4 },
-  uploadProgressBar: { height: 4, backgroundColor: '#2C2C2E', borderRadius: 2, marginBottom: 8, overflow: 'hidden' },
-  uploadProgressFill: { height: 4, backgroundColor: GREEN, borderRadius: 2 },
+  uploadProgressBar: { height: 4, backgroundColor: '#1E1030', borderRadius: 2, marginBottom: 8, overflow: 'hidden' },
+  uploadProgressFill: { height: 4, backgroundColor: ACCENT, borderRadius: 2 },
   uploadSuccessRow: { paddingVertical: 10, alignItems: 'center' },
-  uploadSuccessText: { color: GREEN, fontSize: 14, fontWeight: '600' },
+  uploadSuccessText: { color: ACCENT, fontSize: 14, fontWeight: '600' },
   uploadErrorText: { color: '#FF453A', fontSize: 13, marginTop: 8, textAlign: 'center' },
 
   disconnectBtn: {
@@ -510,9 +510,9 @@ const styles = StyleSheet.create({
   powerBtn: {
     marginHorizontal: 20, marginTop: 10, marginBottom: 8, paddingVertical: 14,
     borderRadius: 14, alignItems: 'center',
-    borderWidth: 1, borderColor: '#2C2C2E',
+    borderWidth: 1, borderColor: BORDER,
   },
-  powerText: { color: '#636366', fontSize: 15, fontWeight: '500' },
+  powerText: { color: '#4A3F6B', fontSize: 15, fontWeight: '500' },
 
   statusCard: { marginHorizontal: 20, marginBottom: 16, backgroundColor: SURFACE, borderRadius: 14, padding: 16 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -524,15 +524,15 @@ const styles = StyleSheet.create({
 
   scanRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 12 },
   sectionLabel: { color: TEXT_SEC, fontSize: 13 },
-  scanBtn: { paddingHorizontal: 18, paddingVertical: 8, backgroundColor: '#2C2C2E', borderRadius: 10, minWidth: 64, alignItems: 'center' },
+  scanBtn: { paddingHorizontal: 18, paddingVertical: 8, backgroundColor: '#1E1030', borderRadius: 10, minWidth: 64, alignItems: 'center' },
   scanBtnDisabled: { opacity: 0.5 },
   scanBtnText: { color: TEXT, fontSize: 14, fontWeight: '500' },
 
   list: { paddingHorizontal: 20, paddingBottom: 100 },
   deviceRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: SURFACE, borderRadius: 14, padding: 14, marginBottom: 10, gap: 12 },
   deviceRowConnected: { borderWidth: 1, borderColor: GREEN },
-  deviceRowPod: { borderWidth: 1, borderColor: '#2C2C2E' },
-  deviceIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#2C2C2E', alignItems: 'center', justifyContent: 'center' },
+  deviceRowPod: { borderWidth: 1, borderColor: ACCENT },
+  deviceIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#1E1030', alignItems: 'center', justifyContent: 'center' },
   deviceIconText: { fontSize: 18, color: TEXT_SEC },
   deviceInfo: { flex: 1, gap: 3 },
   deviceName: { color: TEXT, fontSize: 15, fontWeight: '500' },
