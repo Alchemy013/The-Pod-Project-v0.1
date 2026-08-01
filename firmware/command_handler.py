@@ -186,7 +186,12 @@ class CommandHandler:
         self._push_now_playing(req_id)
 
     def _play_playlist(self, cmd, req_id):
-        self._send_small({'type': 'ERROR', 'cmd': 'PLAY_PLAYLIST', 'msg': 'Not implemented', '_id': req_id})
+        playlist_id = cmd.get('id')
+        if not playlist_id:
+            self._send_small({'type': 'ERROR', 'cmd': 'PLAY_PLAYLIST', 'msg': 'No playlist id', '_id': req_id})
+            return
+        self.mpd.play_playlist(playlist_id)
+        self._push_now_playing(req_id)
 
     def _shuffle(self, cmd, req_id):
         self.mpd.set_shuffle(bool(cmd.get('enabled', False)))

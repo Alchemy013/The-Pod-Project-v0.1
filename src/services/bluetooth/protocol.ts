@@ -31,7 +31,10 @@ export type PodCommand =
   | { cmd: 'GET_INFO' }
   | { cmd: 'SHUTDOWN' }
   | { cmd: 'DELETE_TRACK'; path: string }
-  | { cmd: 'SET_EQ'; preset: 'flat' | 'bass' | 'vocal' | 'treble' };
+  | { cmd: 'SET_EQ'; preset: 'flat' | 'bass' | 'vocal' | 'treble' }
+  | { cmd: 'SCAN_WIFI' }
+  | { cmd: 'CONNECT_WIFI'; ssid: string; password: string }
+  | { cmd: 'GET_WIFI_STATUS' };
 
 export type PodCommandWithId = PodCommand & { _id: string };
 
@@ -63,7 +66,10 @@ export type PodResponse =
   | { type: 'ALBUM_ART'; _id?: string; path: string; data: string }
   | { type: 'CHUNK'; _id: string; seq: number; total: number; data: string }
   | { type: 'CHUNK_END'; _id: string; seq: number; total: number; data: string }
-  | { type: 'INFO'; _id?: string; ip: string; port: number; name: string; firmwareVersion: string };
+  | { type: 'INFO'; _id?: string; ip: string; port: number; name: string; firmwareVersion: string }
+  | { type: 'WIFI_STATUS'; _id?: string; ssid: string; ip: string; signal: number }
+  | { type: 'WIFI_SCAN'; _id?: string; networks: { ssid: string; signal: number; secured: boolean }[] }
+  | { type: 'WIFI_CONNECTED'; _id?: string; ssid: string; ip: string };
 
 function stringToBase64(str: string): string {
   const encoder = new TextEncoder();

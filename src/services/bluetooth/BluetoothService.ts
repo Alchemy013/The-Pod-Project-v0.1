@@ -26,6 +26,7 @@ class ThePodBluetoothService {
   private chunkBuffers = new Map<string, ChunkBuffer>();
   private notificationListeners = new Set<NotificationListener>();
   private disconnectListeners = new Set<() => void>();
+  private _isConnecting = false;
 
   async scan(): Promise<Device[]> {
     const state = await this.manager.state();
@@ -58,11 +59,17 @@ class ThePodBluetoothService {
   }
 
   async connect(deviceId: string): Promise<void> {
+    if (this._isConnecting) return;
+    this._isConnecting = true;
     const CONNECT_TIMEOUT = 12000;
     const timer = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('BLE connect timed out')), CONNECT_TIMEOUT)
     );
-    await Promise.race([this._connectInternal(deviceId), timer]);
+    try {
+      await Promise.race([this._connectInternal(deviceId), timer]);
+    } finally {
+      this._isConnecting = false;
+    }
   }
 
   private async _connectInternal(deviceId: string): Promise<void> {
@@ -71,6 +78,7 @@ class ThePodBluetoothService {
       timeout: 10000,
     });
     await connected.discoverAllServicesAndCharacteristics();
+    await new Promise(r => setTimeout(r, 800));
     console.log('[BLE] Negotiated MTU:', connected.mtu);
     this.device = connected;
     this.subscribeToStatus();

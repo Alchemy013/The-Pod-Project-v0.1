@@ -1,56 +1,20 @@
 import '@/global.css';
 
-import { Platform } from 'react-native';
-
-export const Colors = {
-  light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
-  },
-  dark: {
-    text: '#ffffff',
-    background: '#121212',
-    backgroundElement: '#282828',
-    backgroundSelected: '#404040',
-    textSecondary: '#A7A7A7',
-  },
+export const Palette = {
+  bg: '#121212',
+  surface: '#181818',
+  surfaceHigh: '#282828',
+  text: '#FFFFFF',
+  textSecondary: '#B3B3B3',
+  textMuted: '#8A8A8A',
+  accent: '#32D74B',
+  danger: '#FF453A',
+  warning: '#FFD60A',
 } as const;
 
-export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
-
-export const Fonts = Platform.select({
-  ios: {
-    sans: 'system-ui',
-    serif: 'ui-serif',
-    rounded: 'ui-rounded',
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
-  web: {
-    sans: 'var(--font-display)',
-    serif: 'var(--font-serif)',
-    rounded: 'var(--font-rounded)',
-    mono: 'var(--font-mono)',
-  },
-});
-
-export const Spacing = {
-  half: 2,
-  one: 4,
-  two: 8,
-  three: 16,
-  four: 24,
-  five: 32,
-  six: 64,
+export const Radius = {
+  sm: 6,
+  md: 8,
+  lg: 12,
+  pill: 9999,
 } as const;
-
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
-export const MaxContentWidth = 800;

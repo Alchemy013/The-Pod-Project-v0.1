@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,13 +12,18 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Device } from 'react-native-ble-plx';
+import { GlassView } from 'expo-glass-effect';
 import { useBluetoothStore } from '@/store/bluetooth.store';
 import { useLibraryStore } from '@/store/library.store';
-import { usePlayerStore } from '@/store/player.store';
 import { podService } from '@/services/bluetooth/BluetoothService';
 import { POD_DEVICE_NAME } from '@/services/bluetooth/protocol';
 import { pickAudioFiles, uploadFiles, UploadProgress } from '@/services/transfer/UploadService';
 import { isPodReachable, openWifiSettings } from '@/services/transfer/WifiService';
+import { Palette, Radius } from '@/constants/theme';
+import { Card } from '@/components/ui/Card';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { RowTitle, RowSubtitle } from '@/components/ui/Row';
+import { Sheet } from '@/components/ui/Sheet';
 
 interface StorageInfo {
   totalGB: number;
@@ -118,7 +122,7 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
         setSelectedNet(null);
         setWifiPwd('');
       } else {
-        setWifiError(res.msg ?? 'Connection failed');
+        setWifiError(res.type === 'ERROR' ? res.msg : 'Connection failed');
       }
     } catch {
       setWifiError('Connection timed out');
@@ -187,7 +191,7 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
       <Text style={s.screenTitle}>Pod</Text>
 
       {/* Connection status card */}
-      <View style={s.connectedCard}>
+      <GlassView style={s.connectedCard} glassEffectStyle="clear">
         <View style={s.connectedHeader}>
           <View style={s.podIconCircle}>
             <Text style={s.podIconText}>◉</Text>
@@ -200,11 +204,11 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
             </View>
           </View>
         </View>
-      </View>
+      </GlassView>
 
       {/* Hardware specs */}
-      <Text style={s.sectionTitle}>Hardware</Text>
-      <View style={s.card}>
+      <SectionHeader>Hardware</SectionHeader>
+      <Card>
         <SpecRow label="Device" value="Raspberry Pi Zero 2W" />
         <View style={s.divider} />
         <SpecRow label="Processor" value="ARM Cortex-A53 · 1.0GHz" />
@@ -216,15 +220,15 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
         <SpecRow label="Output" value="3.5mm Analog" />
         <View style={s.divider} />
         <SpecRow label="Firmware" value="1.0.0" />
-      </View>
+      </Card>
 
       {/* WiFi Network */}
-      <Text style={s.sectionTitle}>Network</Text>
-      <View style={s.card}>
+      <SectionHeader>Network</SectionHeader>
+      <Card>
         <View style={s.wifiRow}>
           <View style={s.wifiInfo}>
-            <Text style={s.rowTitle}>{wifiStatus?.ssid ?? 'Unknown Network'}</Text>
-            <Text style={s.rowSub}>{wifiStatus?.ip ?? 'Getting IP…'}</Text>
+            <RowTitle>{wifiStatus?.ssid ?? 'Unknown Network'}</RowTitle>
+            <RowSubtitle>{wifiStatus?.ip ?? 'Getting IP…'}</RowSubtitle>
           </View>
           <View style={[s.signalBadge, { opacity: wifiStatus ? 1 : 0.3 }]}>
             <Text style={s.signalText}>{wifiStatus ? `${wifiStatus.signal}%` : '—'}</Text>
@@ -234,22 +238,14 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
           <Text style={s.wifiChangeBtnText}>Change Network</Text>
         </Pressable>
         <Text style={s.eqNote}>To use iPhone hotspot: enable Personal Hotspot in iPhone Settings first</Text>
-      </View>
+      </Card>
 
-      {/* WiFi Modal */}
-      <Modal visible={wifiModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setWifiModal(false)}>
-        <View style={s.modalContainer}>
-          <View style={s.modalHeader}>
-            <Text style={s.modalTitle}>Select Network</Text>
-            <Pressable onPress={() => setWifiModal(false)} hitSlop={16}>
-              <Text style={s.modalClose}>✕</Text>
-            </Pressable>
-          </View>
-
+      {/* WiFi Sheet */}
+      <Sheet visible={wifiModal} onClose={() => setWifiModal(false)} title="Select Network">
           {scanning ? (
             <View style={s.modalCenter}>
-              <ActivityIndicator color={ACCENT} size="large" />
-              <Text style={s.rowSub}>Scanning for networks…</Text>
+              <ActivityIndicator color={Palette.textSecondary} size="large" />
+              <RowSubtitle>Scanning for networks…</RowSubtitle>
             </View>
           ) : selectedNet ? (
             <View style={s.modalPwdView}>
@@ -258,14 +254,14 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
                 <TextInput
                   style={s.pwdInput}
                   placeholder="Password"
-                  placeholderTextColor={TEXT_MUTE}
+                  placeholderTextColor={Palette.textMuted}
                   secureTextEntry
                   value={wifiPwd}
                   onChangeText={setWifiPwd}
                   autoFocus
                 />
               ) : (
-                <Text style={s.rowSub}>Open network — no password needed</Text>
+                <RowSubtitle>Open network — no password needed</RowSubtitle>
               )}
               {wifiError && <Text style={s.uploadErrorText}>{wifiError}</Text>}
               <View style={s.modalBtnRow}>
@@ -276,9 +272,12 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
                   style={[s.modalConnectBtn, connecting && { opacity: 0.5 }]}
                   onPress={handleConnectWifi}
                   disabled={connecting}
+                  accessibilityRole="button"
+                  accessibilityLabel="Connect"
+                  accessibilityState={{ disabled: connecting }}
                 >
                   {connecting
-                    ? <ActivityIndicator color={BG} size="small" />
+                    ? <ActivityIndicator color={Palette.bg} size="small" />
                     : <Text style={s.modalConnectText}>Connect</Text>}
                 </Pressable>
               </View>
@@ -295,39 +294,41 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
                   onPress={() => { setSelectedNet(item); setWifiPwd(''); setWifiError(null); }}
                 >
                   <View style={s.netInfo}>
-                    <Text style={s.rowTitle}>{item.ssid}</Text>
-                    <Text style={s.rowSub}>{item.secured ? 'Secured' : 'Open'}</Text>
+                    <RowTitle>{item.ssid}</RowTitle>
+                    <RowSubtitle>{item.secured ? 'Secured' : 'Open'}</RowSubtitle>
                   </View>
                   <Text style={s.netSignal}>{item.signal}%</Text>
                 </Pressable>
               )}
             />
           )}
-        </View>
-      </Modal>
+      </Sheet>
 
       {/* Spotify Connect */}
-      <Text style={s.sectionTitle}>Spotify</Text>
-      <View style={s.card}>
-        <Text style={s.rowTitle}>Spotify Connect</Text>
-        <Text style={s.rowSub}>
+      <SectionHeader>Spotify</SectionHeader>
+      <Card>
+        <RowTitle>Spotify Connect</RowTitle>
+        <RowSubtitle>
           Open Spotify → tap the speaker icon → choose "ThePod" to stream directly to this device.
-        </Text>
+        </RowSubtitle>
         <View style={[s.connectedBadgeRow, { marginTop: 12 }]}>
           <View style={s.greenDot} />
           <Text style={s.connectedBadge}>Available as Spotify Connect device</Text>
         </View>
-      </View>
+      </Card>
 
       {/* Equalizer */}
-      <Text style={s.sectionTitle}>Equalizer</Text>
-      <View style={s.card}>
+      <SectionHeader>Equalizer</SectionHeader>
+      <Card>
         <View style={s.eqRow}>
           {(['flat', 'bass', 'vocal', 'treble'] as EqPreset[]).map(preset => (
             <Pressable
               key={preset}
               style={[s.eqBtn, eqPreset === preset && s.eqBtnActive]}
               onPress={() => handleEqPreset(preset)}
+              accessibilityRole="button"
+              accessibilityLabel={`${preset} equalizer preset`}
+              accessibilityState={{ selected: eqPreset === preset }}
             >
               <Text style={[s.eqBtnText, eqPreset === preset && s.eqBtnTextActive]}>
                 {preset.charAt(0).toUpperCase() + preset.slice(1)}
@@ -336,11 +337,11 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
           ))}
         </View>
         <Text style={s.eqNote}>Requires one-time EQ setup on ThePod</Text>
-      </View>
+      </Card>
 
       {/* Battery */}
-      <Text style={s.sectionTitle}>Power</Text>
-      <View style={s.card}>
+      <SectionHeader>Power</SectionHeader>
+      <Card>
         {battery ? (
           <View style={s.batteryRow}>
             <View style={s.batteryIconWrap}>
@@ -355,13 +356,13 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
             </Text>
           </View>
         ) : (
-          <ActivityIndicator color={TEXT_SEC} size="small" />
+          <ActivityIndicator color={Palette.textSecondary} size="small" />
         )}
-      </View>
+      </Card>
 
       {/* Storage */}
-      <Text style={s.sectionTitle}>Storage</Text>
-      <View style={s.card}>
+      <SectionHeader>Storage</SectionHeader>
+      <Card>
         {storage ? (
           <>
             <View style={s.storageBar}>
@@ -372,16 +373,16 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
             </Text>
           </>
         ) : (
-          <ActivityIndicator color={TEXT_SEC} size="small" />
+          <ActivityIndicator color={Palette.textSecondary} size="small" />
         )}
-      </View>
+      </Card>
 
       {/* Upload Music */}
-      <Text style={s.sectionTitle}>Music</Text>
-      <View style={s.card}>
+      <SectionHeader>Music</SectionHeader>
+      <Card>
         {uploadStep ? (
           <>
-            <ActivityIndicator color={ACCENT} size="small" style={{ marginBottom: 10 }} />
+            <ActivityIndicator color={Palette.textSecondary} size="small" style={{ marginBottom: 10 }} />
             <Text style={s.uploadStatusText}>{uploadStep}</Text>
           </>
         ) : uploadProgress ? (
@@ -415,7 +416,7 @@ function ConnectedView({ onDisconnect, podIp, podPort }: {
           </Pressable>
         )}
         {uploadError && <Text style={s.uploadErrorText}>{uploadError}</Text>}
-      </View>
+      </Card>
 
       {/* Disconnect */}
       <Pressable style={s.disconnectBtn} onPress={onDisconnect}>
@@ -486,8 +487,7 @@ function DeviceRow({ device, isConnected, isConnecting, onPress }: {
 export default function PodScreen() {
   const { connectionState, device, scannedDevices, error, podIp, podPort, startScan, connect, disconnect } =
     useBluetoothStore();
-  const { fetchLibrary, clear: clearLibrary } = useLibraryStore();
-  const { refresh: refreshPlayer } = usePlayerStore();
+  const { clear: clearLibrary } = useLibraryStore();
 
   const isScanning = connectionState === 'scanning';
   const isConnecting = connectionState === 'connecting';
@@ -508,8 +508,6 @@ export default function PodScreen() {
   const handleConnect = async (dev: Device) => {
     try {
       await connect(dev.id);
-      await fetchLibrary();
-      await refreshPlayer();
     } catch {
     }
   };
@@ -526,7 +524,7 @@ export default function PodScreen() {
       <View style={s.statusCard}>
         <View style={s.statusRow}>
           <View style={[s.statusDot, {
-            backgroundColor: isConnecting ? '#FFD60A' : isScanning ? ACCENT : TEXT_MUTE,
+            backgroundColor: isConnecting ? '#FFD60A' : isScanning ? TEXT_SEC : TEXT_MUTE,
           }]} />
           <Text style={s.statusText}>
             {isConnecting ? 'Connecting…' : isScanning ? 'Scanning…' : 'Not connected'}
@@ -582,14 +580,13 @@ export default function PodScreen() {
   );
 }
 
-const BG = '#121212';
-const SURFACE = '#181818';
-const SURFACE_HIGH = '#282828';
-const TEXT = '#FFFFFF';
-const TEXT_SEC = '#B3B3B3';
-const TEXT_MUTE = '#535353';
-const GREEN = '#32D74B';
-const ACCENT = '#A855F7';
+const BG = Palette.bg;
+const SURFACE = Palette.surface;
+const SURFACE_HIGH = Palette.surfaceHigh;
+const TEXT = Palette.text;
+const TEXT_SEC = Palette.textSecondary;
+const TEXT_MUTE = Palette.textMuted;
+const GREEN = Palette.accent;
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
@@ -598,42 +595,32 @@ const s = StyleSheet.create({
 
   connectedCard: {
     marginHorizontal: 20, marginBottom: 24,
-    backgroundColor: SURFACE, borderRadius: 12, padding: 16,
-    borderWidth: 1, borderColor: ACCENT,
+    borderRadius: Radius.lg, padding: 16,
+    overflow: 'hidden',
   },
   connectedHeader: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   podIconCircle: {
     width: 48, height: 48, borderRadius: 24,
     backgroundColor: SURFACE_HIGH, alignItems: 'center', justifyContent: 'center',
   },
-  podIconText: { fontSize: 22, color: ACCENT },
+  podIconText: { fontSize: 22, color: TEXT_SEC },
   connectedInfo: { flex: 1, gap: 4 },
   connectedName: { color: TEXT, fontSize: 17, fontWeight: '700' },
   connectedBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   greenDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: GREEN },
   connectedBadge: { color: GREEN, fontSize: 13, fontWeight: '500' },
 
-  sectionTitle: {
-    color: TEXT_SEC, fontSize: 11, fontWeight: '600',
-    letterSpacing: 1.0, textTransform: 'uppercase',
-    paddingHorizontal: 20, marginBottom: 8,
-  },
-
-  card: {
-    marginHorizontal: 20, marginBottom: 24,
-    backgroundColor: SURFACE, borderRadius: 12, padding: 16,
-  },
   specRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 },
   specLabel: { color: TEXT_SEC, fontSize: 15 },
   specValue: { color: TEXT, fontSize: 15, fontWeight: '500' },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: SURFACE_HIGH },
 
   eqRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  eqBtn: { flex: 1, paddingVertical: 9, borderRadius: 8, alignItems: 'center', backgroundColor: SURFACE_HIGH },
-  eqBtnActive: { backgroundColor: ACCENT },
+  eqBtn: { flex: 1, paddingVertical: 9, borderRadius: Radius.md, alignItems: 'center', backgroundColor: SURFACE_HIGH },
+  eqBtnActive: { backgroundColor: TEXT },
   eqBtnText: { color: TEXT_SEC, fontSize: 13, fontWeight: '600' },
-  eqBtnTextActive: { color: TEXT },
-  eqNote: { color: TEXT_MUTE, fontSize: 11, textAlign: 'center' },
+  eqBtnTextActive: { color: BG },
+  eqNote: { color: TEXT_SEC, fontSize: 12, textAlign: 'center' },
 
   batteryRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   batteryIconWrap: { flexDirection: 'row', alignItems: 'center' },
@@ -642,56 +629,56 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderColor: TEXT_SEC,
     padding: 2, overflow: 'hidden',
   },
-  batteryFill: { height: '100%', backgroundColor: ACCENT, borderRadius: 2 },
+  batteryFill: { height: '100%', backgroundColor: GREEN, borderRadius: 2 },
   batteryNub: { width: 3, height: 8, backgroundColor: TEXT_SEC, borderRadius: 1, marginLeft: 2 },
   batteryPct: { color: TEXT, fontSize: 15, fontWeight: '600' },
   batteryStatus: { color: TEXT_SEC, fontSize: 13 },
 
   storageBar: { height: 4, backgroundColor: SURFACE_HIGH, borderRadius: 2, marginBottom: 10, overflow: 'hidden' },
-  storageBarFill: { height: 4, backgroundColor: ACCENT, borderRadius: 2 },
+  storageBarFill: { height: 4, backgroundColor: TEXT_SEC, borderRadius: 2 },
   storageText: { color: TEXT_SEC, fontSize: 13 },
 
-  uploadBtn: { paddingVertical: 12, alignItems: 'center' },
-  uploadBtnText: { color: TEXT, fontSize: 15, fontWeight: '500' },
+  uploadBtn: { paddingVertical: 12, alignItems: 'center', backgroundColor: SURFACE_HIGH, borderRadius: Radius.md },
+  uploadBtnText: { color: TEXT, fontSize: 15, fontWeight: '600' },
   uploadStatusText: { color: TEXT_SEC, fontSize: 13, textAlign: 'center', marginTop: 2 },
-  uploadPctText: { color: TEXT_MUTE, fontSize: 11, textAlign: 'center', marginTop: 4 },
+  uploadPctText: { color: TEXT_SEC, fontSize: 11, textAlign: 'center', marginTop: 4 },
   uploadProgressBar: { height: 4, backgroundColor: SURFACE_HIGH, borderRadius: 2, marginBottom: 8, overflow: 'hidden' },
-  uploadProgressFill: { height: 4, backgroundColor: ACCENT, borderRadius: 2 },
+  uploadProgressFill: { height: 4, backgroundColor: TEXT_SEC, borderRadius: 2 },
   uploadSuccessRow: { paddingVertical: 10, alignItems: 'center' },
-  uploadSuccessText: { color: ACCENT, fontSize: 14, fontWeight: '600' },
+  uploadSuccessText: { color: GREEN, fontSize: 14, fontWeight: '600' },
   uploadErrorText: { color: '#FF453A', fontSize: 13, marginTop: 8, textAlign: 'center' },
 
   disconnectBtn: {
     marginHorizontal: 20, marginTop: 8, paddingVertical: 14,
-    backgroundColor: '#2C0A0A', borderRadius: 12, alignItems: 'center',
+    backgroundColor: '#2C0A0A', borderRadius: Radius.lg, alignItems: 'center',
     borderWidth: 1, borderColor: '#FF453A33',
   },
-  disconnectText: { color: '#FF453A', fontSize: 16, fontWeight: '600' },
+  disconnectText: { color: Palette.danger, fontSize: 16, fontWeight: '600' },
   powerBtn: {
     marginHorizontal: 20, marginTop: 10, marginBottom: 8, paddingVertical: 14,
-    borderRadius: 12, alignItems: 'center',
+    borderRadius: Radius.lg, alignItems: 'center',
     borderWidth: 1, borderColor: SURFACE_HIGH,
   },
-  powerText: { color: TEXT_MUTE, fontSize: 15, fontWeight: '500' },
+  powerText: { color: TEXT_SEC, fontSize: 15, fontWeight: '500' },
 
-  statusCard: { marginHorizontal: 20, marginBottom: 16, backgroundColor: SURFACE, borderRadius: 12, padding: 16 },
+  statusCard: { marginHorizontal: 20, marginBottom: 16, backgroundColor: SURFACE, borderRadius: Radius.lg, padding: 16 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   statusDot: { width: 10, height: 10, borderRadius: 5 },
   statusText: { color: TEXT, fontSize: 15, fontWeight: '500' },
 
-  errorCard: { marginHorizontal: 20, marginBottom: 12, backgroundColor: '#2C0000', borderRadius: 10, padding: 12 },
-  errorText: { color: '#FF453A', fontSize: 13 },
+  errorCard: { marginHorizontal: 20, marginBottom: 12, backgroundColor: '#2C0000', borderRadius: Radius.md, padding: 12 },
+  errorText: { color: Palette.danger, fontSize: 13 },
 
   scanRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 12 },
   sectionLabel: { color: TEXT_SEC, fontSize: 13 },
-  scanBtn: { paddingHorizontal: 18, paddingVertical: 8, backgroundColor: SURFACE_HIGH, borderRadius: 8, minWidth: 64, alignItems: 'center' },
+  scanBtn: { paddingHorizontal: 18, paddingVertical: 8, backgroundColor: SURFACE_HIGH, borderRadius: Radius.md, minWidth: 64, alignItems: 'center' },
   scanBtnDisabled: { opacity: 0.4 },
   scanBtnText: { color: TEXT, fontSize: 14, fontWeight: '500' },
 
   list: { paddingHorizontal: 20, paddingBottom: 100 },
-  deviceRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: SURFACE, borderRadius: 12, padding: 14, marginBottom: 8, gap: 12 },
+  deviceRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: SURFACE, borderRadius: Radius.lg, padding: 14, marginBottom: 8, gap: 12 },
   deviceRowConnected: { borderWidth: 1, borderColor: GREEN },
-  deviceRowPod: { borderWidth: 1, borderColor: ACCENT },
+  deviceRowPod: { borderWidth: 1, borderColor: SURFACE_HIGH },
   deviceIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: SURFACE_HIGH, alignItems: 'center', justifyContent: 'center' },
   deviceIconText: { fontSize: 18, color: TEXT_SEC },
   deviceInfo: { flex: 1, gap: 3 },
@@ -709,24 +696,16 @@ const s = StyleSheet.create({
   // WiFi section
   wifiRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
   wifiInfo: { flex: 1 },
-  signalBadge: { backgroundColor: SURFACE_HIGH, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
+  signalBadge: { backgroundColor: SURFACE_HIGH, borderRadius: Radius.sm, paddingHorizontal: 8, paddingVertical: 4 },
   signalText: { color: TEXT_SEC, fontSize: 12, fontWeight: '600' },
   wifiChangeBtn: {
-    paddingVertical: 10, borderRadius: 8,
-    borderWidth: 1, borderColor: SURFACE_HIGH,
+    paddingVertical: 10, borderRadius: Radius.md,
+    backgroundColor: SURFACE_HIGH,
     alignItems: 'center', marginBottom: 10,
   },
   wifiChangeBtnText: { color: TEXT, fontSize: 14, fontWeight: '500' },
 
-  // WiFi modal
-  modalContainer: { flex: 1, backgroundColor: BG },
-  modalHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: 24, paddingBottom: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: SURFACE_HIGH,
-  },
-  modalTitle: { color: TEXT, fontSize: 20, fontWeight: '700' },
-  modalClose: { color: TEXT_SEC, fontSize: 18, fontWeight: '600' },
+  // WiFi sheet content
   modalCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
   netRow: {
     flexDirection: 'row', alignItems: 'center',
@@ -734,25 +713,25 @@ const s = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: SURFACE_HIGH,
   },
   netInfo: { flex: 1 },
-  netSignal: { color: TEXT_MUTE, fontSize: 13 },
+  netSignal: { color: TEXT_SEC, fontSize: 13 },
 
   // Password screen
   modalPwdView: { padding: 24, gap: 16 },
   modalNetName: { color: TEXT, fontSize: 20, fontWeight: '700', marginBottom: 4 },
   pwdInput: {
-    backgroundColor: SURFACE_HIGH, borderRadius: 8, paddingHorizontal: 14,
+    backgroundColor: SURFACE_HIGH, borderRadius: Radius.md, paddingHorizontal: 14,
     paddingVertical: 12, color: TEXT, fontSize: 16,
   },
   modalBtnRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
   modalBackBtn: {
-    flex: 1, paddingVertical: 13, borderRadius: 8,
+    flex: 1, paddingVertical: 13, borderRadius: Radius.md,
     borderWidth: 1, borderColor: SURFACE_HIGH, alignItems: 'center',
   },
   modalBackText: { color: TEXT_SEC, fontSize: 15, fontWeight: '500' },
   modalConnectBtn: {
-    flex: 2, paddingVertical: 13, borderRadius: 8,
-    backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center',
+    flex: 2, paddingVertical: 13, borderRadius: Radius.md,
+    backgroundColor: TEXT, alignItems: 'center', justifyContent: 'center',
     minHeight: 46,
   },
-  modalConnectText: { color: TEXT, fontSize: 15, fontWeight: '700' },
+  modalConnectText: { color: BG, fontSize: 15, fontWeight: '700' },
 });

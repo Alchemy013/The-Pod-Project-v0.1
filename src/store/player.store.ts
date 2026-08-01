@@ -32,10 +32,10 @@ interface PlayerStore extends NowPlaying {
 
 const REPEAT_CYCLE: RepeatMode[] = ['off', 'one', 'all'];
 
-// Volume curve: quadratic with 70% MPD ceiling.
+// Volume curve: quadratic with 15% MPD ceiling.
 // Prevents ear damage at max and gives fine control at low values.
-// UI 0-100 → MPD 0-70:  mpd = (ui/100)^2 * 70
-// MPD 0-70 → UI 0-100:  ui = sqrt(mpd/70) * 100
+// UI 0-100 → MPD 0-15:  mpd = (ui/100)^2 * 15
+// MPD 0-15 → UI 0-100:  ui = sqrt(mpd/15) * 100
 const VOL_MAX = 15;
 const uiToMpd = (ui: number) => Math.round(Math.pow(ui / 100, 2) * VOL_MAX);
 const mpdToUi = (mpd: number) => Math.round(Math.sqrt(Math.max(0, mpd) / VOL_MAX) * 100);

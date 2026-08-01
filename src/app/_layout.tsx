@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AppTabs from '@/components/app-tabs';
 import { DarkTheme, ThemeProvider } from 'expo-router';
 import TrackPlayer from 'react-native-track-player';
@@ -47,9 +48,11 @@ function NotificationSync() {
 
 export default function RootLayout() {
   return (
-    <ThemeProvider value={DarkTheme}>
-      <NotificationSync />
-      <AppTabs />
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={DarkTheme}>
+        <NotificationSync />
+        <AppTabs />
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

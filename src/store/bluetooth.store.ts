@@ -48,13 +48,6 @@ export const useBluetoothStore = create<BluetoothStore>((set, get) => ({
         if (info.type === 'INFO') { podIp = info.ip; podPort = info.port; }
       } catch {}
       set({ connectionState: 'connected', device, podIp, podPort });
-      // Auto-resume: if MPD has a song loaded but isn't playing, start it
-      try {
-        const np = await podService.request({ cmd: 'GET_NOW_PLAYING' }, 4000);
-        if (np.type === 'NOW_PLAYING' && np.song && np.playbackState !== 'playing') {
-          podService.sendCommand({ cmd: 'PLAY' }).catch(() => {});
-        }
-      } catch {}
     } catch {
       set({ connectionState: 'disconnected' });
     }
@@ -81,6 +74,7 @@ export const useBluetoothStore = create<BluetoothStore>((set, get) => ({
   },
 
   connect: async (deviceId: string) => {
+    if (get().connectionState !== 'disconnected') return;
     set({ connectionState: 'connecting', error: null });
     try {
       await podService.connect(deviceId);

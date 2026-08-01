@@ -112,6 +112,13 @@ class MPDController:
             for f in files:
                 self._client.add(f)
 
+    def play_playlist(self, name: str):
+        with self._lock:
+            self._ensure_connected()
+            self._client.clear()
+            self._client.load(name)
+            self._client.play()
+
     def get_all_songs(self) -> list:
         try:
             return self._cmd(self._client.listallinfo) or []

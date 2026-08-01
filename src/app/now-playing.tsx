@@ -1,27 +1,33 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  FlatList, Image, Modal, PanResponder, Pressable,
+  FlatList, Pressable,
   ScrollView, StyleSheet, Text, useWindowDimensions, View,
 } from 'react-native';
 import Animated, {
-  useAnimatedStyle, useSharedValue, withTiming, Easing,
+  useAnimatedStyle, useSharedValue, withTiming, Easing, runOnJS,
 } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { LinearGradient } from 'expo-linear-gradient';
+import { GlassView } from 'expo-glass-effect';
 import { useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { usePlayerStore } from '@/store/player.store';
 import { useBluetoothStore } from '@/store/bluetooth.store';
 import { podService } from '@/services/bluetooth/BluetoothService';
 import { fetchLyrics, LyricLine } from '@/services/lyrics/LyricsService';
+import { Palette, Radius } from '@/constants/theme';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Sheet } from '@/components/ui/Sheet';
 
 type LyricsState = 'idle' | 'loading' | 'found' | 'not_found' | 'error';
 
-const BG = '#121212';
-const SURFACE = '#181818';
-const SURFACE_HIGH = '#282828';
-const TEXT = '#FFFFFF';
-const TEXT_SEC = '#B3B3B3';
-const TEXT_MUTE = '#535353';
-const ACCENT = '#A855F7';
+const BG = Palette.bg;
+const SURFACE = Palette.surface;
+const SURFACE_HIGH = Palette.surfaceHigh;
+const TEXT = Palette.text;
+const TEXT_SEC = Palette.textSecondary;
+const TEXT_MUTE = Palette.textMuted;
+const GREEN = Palette.accent;
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -111,17 +117,15 @@ export default function NowPlayingScreen() {
     transform: [{ scale: artScale.value }],
   }));
 
-  const swipe = PanResponder.create({
-    onMoveShouldSetPanResponder: (_, gs) =>
-      (Math.abs(gs.dx) > 25 && Math.abs(gs.dy) < Math.abs(gs.dx) * 1.5) ||
-      (gs.dy > 30 && Math.abs(gs.dx) < 50),
-    onPanResponderRelease: (_, gs) => {
-      if (Math.abs(gs.dx) > 70 && Math.abs(gs.dy) < 80) {
-        if (gs.dx < 0) next(); else previous();
-      } else if (gs.dy > 90 && Math.abs(gs.dx) < 60) {
-        router.back();
-      }
-    },
+  const artOpacity = useSharedValue(0);
+  const artFadeStyle = useAnimatedStyle(() => ({ opacity: artOpacity.value }));
+
+  const swipe = Gesture.Pan().onEnd((e) => {
+    if (Math.abs(e.translationX) > 70 && Math.abs(e.translationY) < 80) {
+      if (e.translationX < 0) runOnJS(next)(); else runOnJS(previous)();
+    } else if (e.translationY > 90 && Math.abs(e.translationX) < 60) {
+      runOnJS(router.back)();
+    }
   });
 
   useEffect(() => { setDisplayPosition(position); }, [position]);
@@ -150,10 +154,15 @@ export default function NowPlayingScreen() {
   }, [playbackState]);
 
   useEffect(() => {
-    if (isConnected) refresh();
+    if (!isConnected) return;
+    refresh();
   }, [isConnected]);
 
   useEffect(() => { setLocalVolume(volume); }, [volume]);
+
+  useEffect(() => {
+    artOpacity.value = withTiming(artUri ? 1 : 0, { duration: 250, easing: Easing.out(Easing.cubic) });
+  }, [artUri]);
 
   useEffect(() => {
     const path = song?.path;
@@ -212,13 +221,7 @@ export default function NowPlayingScreen() {
   }
 
   if (!isConnected) {
-    return (
-      <View style={s.center}>
-        <Text style={s.emptyIcon}>◎</Text>
-        <Text style={s.emptyTitle}>Not Connected</Text>
-        <Text style={s.emptySub}>Connect to your Pod in the Pod tab</Text>
-      </View>
-    );
+    return <EmptyState icon="◎" title="Not Connected" subtitle="Connect to your Pod in the Pod tab" />;
   }
 
   const qualityParts: string[] = [];
@@ -228,21 +231,29 @@ export default function NowPlayingScreen() {
 
   return (
     <View style={s.container}>
+      <LinearGradient
+        colors={[SURFACE_HIGH, BG]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+
       {/* Top bar — actions only, minimal */}
       <View style={s.topBar}>
         <View style={s.topBarLeft} />
-        <View style={s.topBarRight}>
+        <GlassView style={s.topBarRight} glassEffectStyle="clear">
           {lyricsState !== 'idle' && (
             <Pressable
               onPress={() => setShowLyrics(v => !v)}
               hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
               style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+              accessibilityRole="button"
+              accessibilityLabel={showLyrics ? 'Hide lyrics' : 'Show lyrics'}
             >
               <SymbolView
                 name="quote.bubble"
                 style={s.actionIcon}
                 type="monochrome"
-                tintColor={showLyrics ? ACCENT : lyricsState === 'found' ? TEXT_SEC : TEXT_MUTE}
+                tintColor={showLyrics ? TEXT : lyricsState === 'found' ? TEXT_SEC : TEXT_MUTE}
               />
             </Pressable>
           )}
@@ -250,14 +261,17 @@ export default function NowPlayingScreen() {
             onPress={() => { loadQueue(); setShowQueue(true); }}
             hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
             style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Show queue"
           >
             <SymbolView name="list.bullet" style={s.actionIcon} type="monochrome" tintColor={TEXT_SEC} />
           </Pressable>
-        </View>
+        </GlassView>
       </View>
 
       {/* Artwork — Spotify full-width */}
-      <Animated.View style={[{ width: artSize, height: artSize, alignSelf: 'center', marginBottom: 28, borderRadius: 8, overflow: 'hidden' }, artStyle]} {...swipe.panHandlers}>
+      <GestureDetector gesture={swipe}>
+      <Animated.View style={[{ width: artSize, height: artSize, alignSelf: 'center', marginBottom: 28, borderRadius: Radius.md, overflow: 'hidden' }, artStyle]}>
         {showLyrics ? (
           lyricsState === 'loading' ? (
             <View style={[s.lyricsBox, { width: artSize, height: artSize }]}>
@@ -286,11 +300,21 @@ export default function NowPlayingScreen() {
             </ScrollView>
           )
         ) : (
-          artUri
-            ? <Image source={{ uri: artUri }} style={{ width: artSize, height: artSize }} resizeMode="cover" />
-            : <View style={[{ width: artSize, height: artSize }, s.artPlaceholder]} />
+          <>
+            <View style={[StyleSheet.absoluteFill, s.artPlaceholder]}>
+              <Text style={s.artPlaceholderIcon}>♫</Text>
+            </View>
+            {artUri && (
+              <Animated.Image
+                source={{ uri: artUri }}
+                style={[StyleSheet.absoluteFill, artFadeStyle]}
+                resizeMode="cover"
+              />
+            )}
+          </>
         )}
       </Animated.View>
+      </GestureDetector>
 
       {/* Song info row — title + artist left, heart right */}
       <View style={s.infoRow}>
@@ -312,15 +336,40 @@ export default function NowPlayingScreen() {
         onSeek={(p) => { setDisplayPosition(p); seek(p); }}
       />
 
-      {/* Transport — Spotify layout: shuffle | ⏮ | ▶circle | ⏭ | repeat */}
+      {/* Skip ±15 row — directly under the timeline */}
+      <View style={s.skipRow}>
+        <Pressable
+          onPress={() => seek(Math.max(0, displayPosition - 15))}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Skip back 15 seconds"
+        >
+          <SymbolView name="gobackward.15" style={s.skipIcon} type="monochrome" tintColor={TEXT_MUTE} />
+        </Pressable>
+        <Pressable
+          onPress={() => seek(Math.min(duration, displayPosition + 15))}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Skip forward 15 seconds"
+        >
+          <SymbolView name="goforward.15" style={s.skipIcon} type="monochrome" tintColor={TEXT_MUTE} />
+        </Pressable>
+      </View>
+
+      {/* Transport — shuffle | ⏮ | ▶circle | ⏭ | repeat */}
       <View style={s.transport}>
         <Pressable
           onPress={toggleShuffle}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Shuffle"
+          accessibilityState={{ selected: shuffle }}
         >
           <SymbolView name="shuffle" style={s.transportIcon} type="monochrome"
-            tintColor={shuffle ? ACCENT : TEXT_SEC} />
+            tintColor={shuffle ? GREEN : TEXT_SEC} />
           {shuffle && <View style={s.activeDot} />}
         </Pressable>
 
@@ -328,20 +377,23 @@ export default function NowPlayingScreen() {
           onPress={previous}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Previous track"
         >
           <SymbolView name="backward.fill" style={s.transportIcon} type="monochrome" tintColor={TEXT} />
         </Pressable>
 
-        {/* Spotify-style circular play button */}
         <Pressable
           onPress={isPlaying ? pause : play}
           style={({ pressed }) => [s.playCircle, pressed && { transform: [{ scale: 0.94 }] }]}
+          accessibilityRole="button"
+          accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
         >
           <SymbolView
             name={isPlaying ? 'pause.fill' : 'play.fill'}
             style={s.playIcon}
             type="monochrome"
-            tintColor="#FFFFFF"
+            tintColor={BG}
           />
         </Pressable>
 
@@ -349,6 +401,8 @@ export default function NowPlayingScreen() {
           onPress={next}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Next track"
         >
           <SymbolView name="forward.fill" style={s.transportIcon} type="monochrome" tintColor={TEXT} />
         </Pressable>
@@ -357,12 +411,15 @@ export default function NowPlayingScreen() {
           onPress={cycleRepeat}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Repeat: ${repeat}`}
+          accessibilityState={{ selected: repeat !== 'off' }}
         >
           <SymbolView
             name={repeat === 'one' ? 'repeat.1' : 'repeat'}
             style={s.transportIcon}
             type="monochrome"
-            tintColor={repeat !== 'off' ? ACCENT : TEXT_SEC}
+            tintColor={repeat !== 'off' ? GREEN : TEXT_SEC}
           />
           {repeat !== 'off' && <View style={s.activeDot} />}
         </Pressable>
@@ -387,38 +444,8 @@ export default function NowPlayingScreen() {
         <SymbolView name="speaker.wave.3.fill" style={s.volIcon} type="monochrome" tintColor={TEXT_MUTE} />
       </View>
 
-      {/* Skip ±15 row */}
-      <View style={s.skipRow}>
-        <Pressable
-          onPress={() => seek(Math.max(0, displayPosition - 15))}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
-        >
-          <SymbolView name="gobackward.15" style={s.skipIcon} type="monochrome" tintColor={TEXT_MUTE} />
-        </Pressable>
-        <Pressable
-          onPress={() => seek(Math.min(duration, displayPosition + 15))}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
-        >
-          <SymbolView name="goforward.15" style={s.skipIcon} type="monochrome" tintColor={TEXT_MUTE} />
-        </Pressable>
-      </View>
-
-      {/* Queue modal */}
-      <Modal visible={showQueue} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowQueue(false)}>
-        <View style={q.sheet}>
-          <View style={q.handle} />
-          <View style={q.titleRow}>
-            <Text style={q.sheetTitle}>Queue</Text>
-            <Pressable
-              onPress={() => setShowQueue(false)}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
-            >
-              <SymbolView name="xmark.circle.fill" style={{ width: 24, height: 24 }} type="monochrome" tintColor={TEXT_MUTE} />
-            </Pressable>
-          </View>
+      {/* Queue sheet */}
+      <Sheet visible={showQueue} onClose={() => setShowQueue(false)} title="Queue">
           {queue.length === 0 ? (
             <View style={q.empty}><Text style={q.emptyText}>Queue is empty</Text></View>
           ) : (
@@ -436,7 +463,7 @@ export default function NowPlayingScreen() {
                   >
                     <View style={q.indexCol}>
                       {active
-                        ? <SymbolView name="speaker.wave.2.fill" style={{ width: 14, height: 14 }} type="monochrome" tintColor={ACCENT} />
+                        ? <SymbolView name="speaker.wave.2.fill" style={{ width: 14, height: 14 }} type="monochrome" tintColor={GREEN} />
                         : <Text style={q.indexText}>{index + 1}</Text>}
                     </View>
                     <View style={q.songInfo}>
@@ -449,8 +476,7 @@ export default function NowPlayingScreen() {
               }}
             />
           )}
-        </View>
-      </Modal>
+      </Sheet>
     </View>
   );
 }
@@ -464,10 +490,14 @@ const s = StyleSheet.create({
 
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
   topBarLeft: { flex: 1 },
-  topBarRight: { flexDirection: 'row', alignItems: 'center', gap: 20 },
+  topBarRight: {
+    flexDirection: 'row', alignItems: 'center', gap: 20,
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: Radius.pill,
+  },
   actionIcon: { width: 22, height: 22 },
 
-  artPlaceholder: { backgroundColor: SURFACE_HIGH },
+  artPlaceholder: { backgroundColor: SURFACE_HIGH, alignItems: 'center', justifyContent: 'center' },
+  artPlaceholderIcon: { color: TEXT_MUTE, fontSize: 52 },
 
   lyricsBox: { backgroundColor: SURFACE, alignItems: 'center', justifyContent: 'center', padding: 24 },
   lyricsMeta: { color: TEXT_MUTE, fontSize: 14, textAlign: 'center' },
@@ -489,7 +519,7 @@ const s = StyleSheet.create({
   seekContainer: { marginBottom: 24 },
   seekHit: { height: 20, justifyContent: 'center', marginBottom: 6 },
   seekTrack: { height: 4, backgroundColor: '#535353', borderRadius: 2, overflow: 'visible' },
-  seekFill: { height: 4, backgroundColor: ACCENT, borderRadius: 2, position: 'absolute', left: 0, top: 0 },
+  seekFill: { height: 4, backgroundColor: TEXT, borderRadius: 2, position: 'absolute', left: 0, top: 0 },
   seekThumb: {
     width: 14, height: 14, borderRadius: 7,
     backgroundColor: TEXT,
@@ -506,15 +536,15 @@ const s = StyleSheet.create({
   transportIcon: { width: 26, height: 26 },
   playCircle: {
     width: 72, height: 72, borderRadius: 36,
-    backgroundColor: ACCENT,
+    backgroundColor: TEXT,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: ACCENT, shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4, shadowRadius: 20,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 10,
   },
   playIcon: { width: 30, height: 30 },
   activeDot: {
     width: 4, height: 4, borderRadius: 2,
-    backgroundColor: ACCENT, alignSelf: 'center', marginTop: 4,
+    backgroundColor: GREEN, alignSelf: 'center', marginTop: 4,
   },
 
   // Skip buttons
@@ -530,17 +560,9 @@ const s = StyleSheet.create({
   volTrack: { height: 4, backgroundColor: '#535353', borderRadius: 2 },
   volFill: { height: 4, backgroundColor: TEXT, borderRadius: 2 },
   volIcon: { width: 16, height: 16 },
-
-  emptyIcon: { fontSize: 40, color: TEXT_MUTE },
-  emptyTitle: { color: TEXT, fontSize: 18, fontWeight: '700' },
-  emptySub: { color: TEXT_SEC, fontSize: 14, textAlign: 'center', paddingHorizontal: 40 },
 });
 
 const q = StyleSheet.create({
-  sheet: { flex: 1, backgroundColor: '#121212', paddingTop: 12 },
-  handle: { width: 36, height: 4, backgroundColor: SURFACE_HIGH, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 8 },
-  sheetTitle: { color: TEXT, fontSize: 18, fontWeight: '700' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyText: { color: TEXT_MUTE, fontSize: 14 },
   row: { flexDirection: 'row', alignItems: 'center', height: 64, paddingHorizontal: 20, gap: 14 },
