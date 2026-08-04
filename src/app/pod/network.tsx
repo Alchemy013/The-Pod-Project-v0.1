@@ -1,0 +1,219 @@
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { podService } from '@/services/bluetooth/BluetoothService';
+import { usePodInfoStore } from '@/store/pod.store';
+import { Palette, Radius } from '@/constants/theme';
+import { Card } from '@/components/ui/Card';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { RowTitle, RowSubtitle } from '@/components/ui/Row';
+
+type WifiNetwork = { ssid: string; signal: number; secured: boolean };
+
+export default function NetworkScreen() {
+  const { wifiStatus, refreshWifiStatus, setWifiStatus } = usePodInfoStore();
+
+  const [browsing, setBrowsing] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [networks, setNetworks] = useState<WifiNetwork[]>([]);
+  const [selectedNet, setSelectedNet] = useState<WifiNetwork | null>(null);
+  const [wifiPwd, setWifiPwd] = useState('');
+  const [connecting, setConnecting] = useState(false);
+  const [wifiError, setWifiError] = useState<string | null>(null);
+
+  useEffect(() => {
+    refreshWifiStatus();
+  }, []);
+
+  const handleScan = async () => {
+    setBrowsing(true);
+    setScanning(true);
+    setNetworks([]);
+    setSelectedNet(null);
+    setWifiPwd('');
+    setWifiError(null);
+    try {
+      const res = await podService.request({ cmd: 'SCAN_WIFI' }, 25000);
+      if (res.type === 'WIFI_SCAN') setNetworks(res.networks ?? []);
+    } catch {
+      setWifiError('Scan failed');
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const handleConnect = async () => {
+    if (!selectedNet) return;
+    setConnecting(true);
+    setWifiError(null);
+    try {
+      const res = await podService.request(
+        { cmd: 'CONNECT_WIFI', ssid: selectedNet.ssid, password: wifiPwd },
+        35000,
+      );
+      if (res.type === 'WIFI_CONNECTED') {
+        setWifiStatus({ ssid: res.ssid, ip: res.ip, signal: wifiStatus?.signal ?? 0 });
+        setBrowsing(false);
+        setSelectedNet(null);
+        setWifiPwd('');
+      } else {
+        setWifiError(res.type === 'ERROR' ? res.msg : 'Connection failed');
+      }
+    } catch {
+      setWifiError('Connection timed out');
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  if (!browsing) {
+    return (
+      <View style={s.container}>
+        <SectionHeader>Current Network</SectionHeader>
+        <Card style={{ padding: 0 }}>
+          <View style={s.statusRow}>
+            <View style={s.statusInfo}>
+              <RowTitle>{wifiStatus?.ssid ?? 'Unknown Network'}</RowTitle>
+              <RowSubtitle>{wifiStatus?.ip ?? 'Getting IP…'}</RowSubtitle>
+            </View>
+            <View style={[s.signalBadge, { opacity: wifiStatus ? 1 : 0.3 }]}>
+              <Text style={s.signalText}>{wifiStatus ? `${wifiStatus.signal}%` : '—'}</Text>
+            </View>
+          </View>
+        </Card>
+
+        <Pressable style={s.changeBtn} onPress={handleScan}>
+          <Text style={s.changeBtnText}>Scan for Networks</Text>
+        </Pressable>
+        <Text style={s.note}>To use iPhone hotspot: enable Personal Hotspot in iPhone Settings first</Text>
+      </View>
+    );
+  }
+
+  if (selectedNet) {
+    return (
+      <View style={s.pwdContainer}>
+        <Text style={s.pwdNetName}>{selectedNet.ssid}</Text>
+        {selectedNet.secured ? (
+          <TextInput
+            style={s.pwdInput}
+            placeholder="Password"
+            placeholderTextColor={Palette.textMuted}
+            secureTextEntry
+            value={wifiPwd}
+            onChangeText={setWifiPwd}
+            autoFocus
+          />
+        ) : (
+          <RowSubtitle>Open network — no password needed</RowSubtitle>
+        )}
+        {wifiError && <Text style={s.errorText}>{wifiError}</Text>}
+        <View style={s.pwdBtnRow}>
+          <Pressable style={s.backBtn} onPress={() => { setSelectedNet(null); setWifiPwd(''); setWifiError(null); }}>
+            <Text style={s.backBtnText}>Back</Text>
+          </Pressable>
+          <Pressable
+            style={[s.connectBtn, connecting && { opacity: 0.5 }]}
+            onPress={handleConnect}
+            disabled={connecting}
+            accessibilityRole="button"
+            accessibilityLabel="Connect"
+            accessibilityState={{ disabled: connecting }}
+          >
+            {connecting
+              ? <ActivityIndicator color={Palette.bg} size="small" />
+              : <Text style={s.connectBtnText}>Connect</Text>}
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={s.container}>
+      <View style={s.listHeaderRow}>
+        <Text style={s.listHeaderTitle}>Networks</Text>
+        <Pressable onPress={() => setBrowsing(false)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Text style={s.cancelText}>Cancel</Text>
+        </Pressable>
+      </View>
+      {scanning ? (
+        <View style={s.center}>
+          <ActivityIndicator color={Palette.textSecondary} size="large" />
+          <RowSubtitle>Scanning for networks…</RowSubtitle>
+        </View>
+      ) : (
+        <FlatList
+          data={networks}
+          keyExtractor={(item) => item.ssid}
+          contentContainerStyle={{ paddingBottom: 40 }}
+          ListEmptyComponent={<Text style={s.emptySub}>No networks found</Text>}
+          renderItem={({ item }) => (
+            <Pressable
+              style={({ pressed }) => [s.netRow, pressed && { opacity: 0.6 }]}
+              onPress={() => { setSelectedNet(item); setWifiPwd(''); setWifiError(null); }}
+            >
+              <View style={s.netInfo}>
+                <RowTitle>{item.ssid}</RowTitle>
+                <RowSubtitle>{item.secured ? 'Secured' : 'Open'}</RowSubtitle>
+              </View>
+              <Text style={s.netSignal}>{item.signal}%</Text>
+            </Pressable>
+          )}
+        />
+      )}
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Palette.bg, paddingTop: 8 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
+
+  listHeaderRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingBottom: 10,
+  },
+  listHeaderTitle: { color: Palette.textSecondary, fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1.0 },
+  cancelText: { color: Palette.accent, fontSize: 15, fontWeight: '500' },
+
+  statusRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
+  statusInfo: { flex: 1 },
+  signalBadge: { backgroundColor: Palette.surfaceHigh, borderRadius: Radius.sm, paddingHorizontal: 8, paddingVertical: 4 },
+  signalText: { color: Palette.textSecondary, fontSize: 12, fontWeight: '600' },
+
+  changeBtn: {
+    marginHorizontal: 20, paddingVertical: 12, borderRadius: Radius.md,
+    backgroundColor: Palette.surfaceHigh, alignItems: 'center', marginBottom: 10,
+  },
+  changeBtnText: { color: Palette.text, fontSize: 15, fontWeight: '600' },
+  note: { color: Palette.textSecondary, fontSize: 12, textAlign: 'center', paddingHorizontal: 20 },
+
+  netRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Palette.surfaceHigh,
+  },
+  netInfo: { flex: 1 },
+  netSignal: { color: Palette.textSecondary, fontSize: 13 },
+  emptySub: { color: Palette.textSecondary, fontSize: 14, textAlign: 'center', paddingHorizontal: 20, paddingTop: 40 },
+
+  pwdContainer: { flex: 1, backgroundColor: Palette.bg, padding: 24, gap: 16 },
+  pwdNetName: { color: Palette.text, fontSize: 20, fontWeight: '700', marginBottom: 4 },
+  pwdInput: {
+    backgroundColor: Palette.surfaceHigh, borderRadius: Radius.md, paddingHorizontal: 14,
+    paddingVertical: 12, color: Palette.text, fontSize: 16,
+  },
+  errorText: { color: Palette.danger, fontSize: 13, marginTop: 8, textAlign: 'center' },
+  pwdBtnRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  backBtn: {
+    flex: 1, paddingVertical: 13, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Palette.surfaceHigh, alignItems: 'center',
+  },
+  backBtnText: { color: Palette.textSecondary, fontSize: 15, fontWeight: '500' },
+  connectBtn: {
+    flex: 2, paddingVertical: 13, borderRadius: Radius.md,
+    backgroundColor: Palette.text, alignItems: 'center', justifyContent: 'center',
+    minHeight: 46,
+  },
+  connectBtnText: { color: Palette.bg, fontSize: 15, fontWeight: '700' },
+});

@@ -46,3 +46,7 @@ example
 .claude/
 CLAUDE.md
 AGENTS.md
+
+# generated/cache
+brag-output/
+firmware/__pycache__/
