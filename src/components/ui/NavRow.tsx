@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SymbolView } from 'expo-symbols';
-import { Palette } from '@/constants/theme';
+import { Icon } from '@/components/ui/icons';
+import { Palette, Font } from '@/constants/theme';
 
 export function NavRow({ label, value, onPress, destructive, last, valueColor }: {
   label: string;
@@ -26,7 +26,7 @@ export function NavRow({ label, value, onPress, destructive, last, valueColor }:
           </Text>
         )}
         {interactive && !destructive && (
-          <SymbolView name="chevron.right" style={s.chevron} type="monochrome" tintColor={Palette.textMuted} />
+          <Icon name="chevron-right" size={14} color={Palette.textMuted} />
         )}
       </View>
     </Pressable>
@@ -43,13 +43,12 @@ const s = StyleSheet.create({
     gap: 12,
   },
   divider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Palette.surfaceHigh,
+    borderBottomWidth: 1,
+    borderBottomColor: Palette.divider,
   },
   pressed: { opacity: 0.6 },
-  label: { flex: 1, color: Palette.text, fontSize: 15.5 },
+  label: { flex: 1, color: Palette.text, fontFamily: Font.medium, fontSize: 14 },
   destructiveLabel: { color: Palette.danger },
   right: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  value: { color: Palette.textSecondary, fontSize: 15, maxWidth: 170 },
-  chevron: { width: 9, height: 14 },
+  value: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 14, maxWidth: 170 },
 });

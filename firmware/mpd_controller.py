@@ -105,6 +105,22 @@ class MPDController:
         except Exception:
             return []
 
+    def clear_upcoming(self):
+        """Delete everything after the current track, leaving playback untouched."""
+        with self._lock:
+            self._ensure_connected()
+            try:
+                status = self._client.status()
+                current = int(status.get('song', -1))
+                length = int(status.get('playlistlength', 0))
+            except Exception:
+                return
+            if current >= 0 and current + 1 < length:
+                self._client.delete((current + 1, length))
+
+    def add_to_queue(self, path: str):
+        self._cmd(self._client.add, path)
+
     def clear_queue_and_add(self, files: list):
         with self._lock:
             self._ensure_connected()

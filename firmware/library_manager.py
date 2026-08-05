@@ -65,6 +65,8 @@ def build_library(mpd: MPDController) -> dict:
             'bitDepth': 0,
             'fileSize': 0,
             'path': file_path,
+            # MPD reports this per-file as ISO-8601 (mtime on disk, i.e. when it was added/synced).
+            'dateAdded': entry.get('last-modified', ''),
         }
         songs_by_id[song_id] = song
 

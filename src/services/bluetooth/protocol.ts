@@ -27,10 +27,12 @@ export type PodCommand =
   | { cmd: 'GET_QUEUE' }
   | { cmd: 'GET_BATTERY' }
   | { cmd: 'GET_STORAGE' }
-  | { cmd: 'GET_ALBUM_ART'; path: string; size?: 'small' | 'large' }
+  | { cmd: 'GET_ALBUM_ART'; path: string; size?: 'small' | 'medium' | 'large' }
   | { cmd: 'GET_INFO' }
   | { cmd: 'SHUTDOWN' }
   | { cmd: 'DELETE_TRACK'; path: string }
+  | { cmd: 'CLEAR_QUEUE' }
+  | { cmd: 'ADD_TO_QUEUE'; path: string }
   | { cmd: 'SET_EQ'; preset: 'flat' | 'bass' | 'vocal' | 'treble' }
   | { cmd: 'SCAN_WIFI' }
   | { cmd: 'CONNECT_WIFI'; ssid: string; password: string }

@@ -42,8 +42,8 @@ the weight of it turning over in a hand. Tactile, unhurried.
 ### SCENE 3 — Connect (0:11–0:17)
 
 **Visual:** The companion app's Pod tab — scanning, "ThePod" appears, tap to
-connect, status dot turns green, "Connected" badge. Real pairing flow, shot
-straight — fast and effortless.
+connect, the accent indicator lights, "Connected" badge. Real pairing flow,
+shot straight — fast and effortless.
 
 **VO:**
 > "Pairs in seconds. No cables to your phone. No cloud in between."
@@ -87,8 +87,8 @@ each held ~1.3–1.5s:
 > "ThePod."
 > "Your music. Untouched."
 
-Small wordmark in the app's own palette (near-black background, green
-accent) holds on the last beat.
+Small wordmark in the app's own palette (near-black `#0A0A0A` background,
+red-orange `#ec3013` accent) holds on the last beat.
 
 **Audio:** Music swells softly under the final line, then fades to silence.
 

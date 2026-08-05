@@ -5,7 +5,7 @@ import { useLibraryStore } from '@/store/library.store';
 import { usePodInfoStore } from '@/store/pod.store';
 import { pickAudioFiles, uploadFiles, UploadProgress } from '@/services/transfer/UploadService';
 import { isPodReachable, openWifiSettings } from '@/services/transfer/WifiService';
-import { Palette, Radius } from '@/constants/theme';
+import { Palette, Font } from '@/constants/theme';
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 
@@ -138,17 +138,17 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: Palette.bg },
   content: { paddingTop: 8, paddingBottom: 60 },
 
-  storageBar: { height: 4, backgroundColor: Palette.surfaceHigh, borderRadius: 2, marginBottom: 10, overflow: 'hidden' },
-  storageBarFill: { height: 4, backgroundColor: Palette.textSecondary, borderRadius: 2 },
-  storageText: { color: Palette.textSecondary, fontSize: 13 },
+  storageBar: { height: 6, backgroundColor: Palette.divider, marginBottom: 10, overflow: 'hidden' },
+  storageBarFill: { height: 6, backgroundColor: Palette.accent },
+  storageText: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 13, fontVariant: ['tabular-nums'] },
 
-  uploadBtn: { paddingVertical: 12, alignItems: 'center', backgroundColor: Palette.surfaceHigh, borderRadius: Radius.md },
-  uploadBtnText: { color: Palette.text, fontSize: 15, fontWeight: '600' },
-  uploadStatusText: { color: Palette.textSecondary, fontSize: 13, textAlign: 'center', marginTop: 2 },
-  uploadPctText: { color: Palette.textSecondary, fontSize: 11, textAlign: 'center', marginTop: 4 },
-  uploadProgressBar: { height: 4, backgroundColor: Palette.surfaceHigh, borderRadius: 2, marginBottom: 8, overflow: 'hidden' },
-  uploadProgressFill: { height: 4, backgroundColor: Palette.textSecondary, borderRadius: 2 },
+  uploadBtn: { paddingVertical: 13, alignItems: 'center', borderWidth: 2, borderColor: Palette.border },
+  uploadBtnText: { color: Palette.text, fontFamily: Font.heading, fontSize: 12, letterSpacing: 1.0, textTransform: 'uppercase' },
+  uploadStatusText: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 13, textAlign: 'center', marginTop: 2 },
+  uploadPctText: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 11, textAlign: 'center', marginTop: 4 },
+  uploadProgressBar: { height: 4, backgroundColor: Palette.divider, marginBottom: 8, overflow: 'hidden' },
+  uploadProgressFill: { height: 4, backgroundColor: Palette.accent },
   uploadSuccessRow: { paddingVertical: 10, alignItems: 'center' },
-  uploadSuccessText: { color: Palette.accent, fontSize: 14, fontWeight: '600' },
+  uploadSuccessText: { color: Palette.accent, fontFamily: Font.bold, fontSize: 14 },
   uploadErrorText: { color: Palette.danger, fontSize: 13, marginTop: 8, textAlign: 'center' },
 });

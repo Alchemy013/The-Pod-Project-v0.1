@@ -62,10 +62,12 @@ soldering, flashing, or configuration step for the buyer.
 - **iPhone app** — React Native + Expo, file-based routing (Expo Router),
   Zustand for state, `react-native-ble-plx` for Bluetooth, Reanimated +
   Gesture Handler for the interactions, `react-native-track-player` for lock
-  screen / Control Center integration. Visual language: dark, glass, rounded,
-  Apple Music / iPod Classic / Nothing / Sony Walkman inspired — deliberately
-  polished enough that the first reaction is "this looks like Spotify,"
-  before the reveal that it's controlling a Raspberry Pi.
+  screen / Control Center integration. Visual language: flat modernist —
+  near-black, zero corner radius, Archivo type at extreme size contrast,
+  structure drawn with hairline rules instead of cards, and a single
+  red-orange accent doing all the pointing. Closer to a Braun manual or a
+  Walkman faceplate than to a streaming app; the earlier "dark, glass,
+  rounded, Spotify-ish" direction was replaced (see `Design.pdf`).
 - **Pi firmware** — Python. A custom BlueZ GATT server (no phone pairing
   prompt required — an auto-accept pairing agent handles that), MPD for
   actual playback and queue/library management, ALSA + alsaequal for a
@@ -74,14 +76,20 @@ soldering, flashing, or configuration step for the buyer.
 ## What it actually does today
 
 - Scans for and connects to the Pi over Bluetooth with no manual pairing step
-- Browses your library by Songs / Albums / Artists, with real album art
+- Browses your library by Albums / Songs / Artists, with real album art
   pulled straight out of the audio files (FLAC embedded art, ID3 tags, or
-  folder images)
+  folder images), sortable A–Z or by recently added
+- Search across the whole library, with recent searches remembered
 - Full transport control — play, pause, skip, seek, shuffle, repeat, volume
   (curved so it doesn't blast your ears at the top of the slider)
-- A queue you can view and jump around in, mid-playback
+- A Now Playing screen with three switchable layouts, time-synced lyrics, and
+  the track's real format / bit depth / sample rate
+- A queue you can view, jump around in, add to, and clear mid-playback —
+  separating what's continuing from the album from what you queued yourself
+- A History tab: what you played and when, plus year-end style listening stats
+  (tracks played, hours, records added, albums you've never played)
+- A mini player above the tab bar wherever you are in the app
 - Lock screen / Control Center playback controls, synced live from the Pi
-- Playlist playback
 - A 10-band EQ with Flat / Bass / Vocal / Treble presets, actually applied at
   the ALSA level, not a fake UI toggle
 - Live battery percentage and charge state, storage used/free, and track
@@ -104,6 +112,9 @@ soldering, flashing, or configuration step for the buyer.
 - **Lossless, format-aware.** The Now Playing screen shows the real sample
   rate and bit depth MPD is currently outputting (e.g. "FLAC · 24-BIT ·
   96 kHz"), not a static badge.
+- **It fails visibly, not silently.** A crash in the UI shows the actual stack
+  instead of a black screen, and a font that won't load falls back after three
+  seconds rather than hanging the app forever.
 - **It survives being unplugged.** Auto-pause on Bluetooth disconnect, MPD
   auto-reconnect if it hiccups, the GATT server auto-advertises on boot with
   no manual step required (this used to require a manual `btmgmt` command

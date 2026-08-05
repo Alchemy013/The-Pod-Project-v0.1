@@ -32,12 +32,14 @@ export const useBluetoothStore = create<BluetoothStore>((set, get) => ({
 
   autoConnect: async () => {
     if (get().connectionState !== 'disconnected') return;
-    set({ connectionState: 'connecting', error: null });
+    // Read the saved id *before* touching connectionState. Flipping to
+    // 'connecting' and straight back to 'disconnected' on a fresh install
+    // re-triggered PairingScreen's scan effect, starting a second overlapping
+    // scan whose empty result overwrote the first scan's real devices.
     const savedId = await AsyncStorage.getItem(SAVED_DEVICE_KEY);
-    if (!savedId) {
-      set({ connectionState: 'disconnected' });
-      return;
-    }
+    if (!savedId) return;
+    if (get().connectionState !== 'disconnected') return;
+    set({ connectionState: 'connecting', error: null });
     try {
       await podService.connect(savedId);
       const device = podService.connectedDevice;

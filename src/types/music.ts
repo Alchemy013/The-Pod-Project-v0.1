@@ -16,6 +16,8 @@ export interface Song {
   bitDepth: number;
   fileSize: number;
   path: string;
+  /** ISO-8601 file mtime reported by MPD — used as a "recently added" proxy. Absent on firmware older than this redesign. */
+  dateAdded?: string;
 }
 
 export interface Album {

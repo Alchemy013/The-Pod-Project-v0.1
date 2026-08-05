@@ -1,5 +1,5 @@
 import { StyleSheet, Text } from 'react-native';
-import { Palette } from '@/constants/theme';
+import { Palette, Font } from '@/constants/theme';
 
 export function SectionHeader({ children }: { children: string }) {
   return <Text style={s.title}>{children}</Text>;
@@ -8,11 +8,11 @@ export function SectionHeader({ children }: { children: string }) {
 const s = StyleSheet.create({
   title: {
     color: Palette.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 1.0,
+    fontFamily: Font.bold,
+    fontSize: 9,
+    letterSpacing: 1.3,
     textTransform: 'uppercase',
     paddingHorizontal: 20,
-    marginBottom: 8,
+    marginBottom: 10,
   },
 });

@@ -61,6 +61,8 @@ class CommandHandler:
             'GET_INFO': self._get_info,
             'SHUTDOWN': self._shutdown,
             'DELETE_TRACK': self._delete_track,
+            'CLEAR_QUEUE': self._clear_queue,
+            'ADD_TO_QUEUE': self._add_to_queue,
             'SET_EQ': self._set_eq,
             'SCAN_WIFI': self._scan_wifi,
             'CONNECT_WIFI': self._connect_wifi,
@@ -265,8 +267,12 @@ class CommandHandler:
         try:
             from PIL import Image
             size = cmd.get('size', 'large')
-            px = 80 if size == 'small' else 300
-            quality = 70 if size == 'small' else 75
+            # 'large' feeds a near-fullscreen view (~1170 physical px on a 3x
+            # phone), so 300px was visibly upscaled. 'medium' keeps the old
+            # 300px budget for the library grid, whose art is prefetched for
+            # every album over BLE — bumping that would slow the whole grid.
+            px = {'small': 80, 'medium': 300}.get(size, 640)
+            quality = {'small': 70, 'medium': 78}.get(size, 85)
             img = Image.open(io.BytesIO(art_bytes)).convert('RGB')
             img.thumbnail((px, px), Image.LANCZOS)
             buf = io.BytesIO()
@@ -324,6 +330,18 @@ class CommandHandler:
             self._send_small({'type': 'ERROR', 'cmd': 'DELETE_TRACK', 'msg': 'File not found', '_id': req_id})
         except Exception as e:
             self._send_small({'type': 'ERROR', 'cmd': 'DELETE_TRACK', 'msg': str(e), '_id': req_id})
+
+    def _clear_queue(self, cmd, req_id):
+        self.mpd.clear_upcoming()
+        self._send_small({'type': 'OK', 'cmd': 'CLEAR_QUEUE', '_id': req_id})
+
+    def _add_to_queue(self, cmd, req_id):
+        path = cmd.get('path', '')
+        if not path:
+            self._send_small({'type': 'ERROR', 'cmd': 'ADD_TO_QUEUE', 'msg': 'No path', '_id': req_id})
+            return
+        self.mpd.add_to_queue(path)
+        self._send_small({'type': 'OK', 'cmd': 'ADD_TO_QUEUE', '_id': req_id})
 
     def _set_eq(self, cmd, req_id):
         preset = cmd.get('preset', 'flat')
@@ -524,4 +542,5 @@ class CommandHandler:
             'bitDepth': 0,
             'fileSize': 0,
             'path': file_path,
+            'dateAdded': raw.get('last-modified', ''),
         }

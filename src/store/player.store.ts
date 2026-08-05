@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { NowPlaying, PlaybackState, RepeatMode, Song } from '@/types/music';
 import { podService } from '@/services/bluetooth/BluetoothService';
 import { updateLockScreen } from '@/services/audio/LockScreenService';
+import { useHistoryStore } from '@/store/history.store';
 
 interface PlayerStore extends NowPlaying {
   play: () => Promise<void>;
@@ -18,6 +19,9 @@ interface PlayerStore extends NowPlaying {
   cycleRepeat: () => Promise<void>;
   refresh: () => Promise<void>;
   loadQueue: () => Promise<void>;
+  clearQueue: () => Promise<void>;
+  addToQueue: (path: string) => Promise<void>;
+  addedSongIds: Set<string>;
   applyNowPlaying: (data: {
     song: Song | null;
     playbackState: PlaybackState;
@@ -50,6 +54,7 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
   repeat: 'off',
   queue: [],
   queueIndex: 0,
+  addedSongIds: new Set(),
 
   play: () => podService.sendCommand({ cmd: 'PLAY' }),
   pause: () => podService.sendCommand({ cmd: 'PAUSE' }),
@@ -87,7 +92,26 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
     }
   },
 
+  clearQueue: async () => {
+    const response = await podService.request({ cmd: 'CLEAR_QUEUE' }, 10000);
+    if (response.type === 'OK') await get().loadQueue();
+  },
+
+  // "Added by you" provenance is session-only — MPD's queue has no concept of
+  // how a track got there, so we track ids we explicitly appended ourselves.
+  addToQueue: async (path) => {
+    const response = await podService.request({ cmd: 'ADD_TO_QUEUE', path }, 10000);
+    if (response.type !== 'OK') return;
+    await get().loadQueue();
+    const added = get().queue.find((s) => s.path === path);
+    if (added) set((state) => ({ addedSongIds: new Set(state.addedSongIds).add(added.id) }));
+  },
+
   applyNowPlaying: (data) => {
+    const previousSongId = get().song?.id;
+    if (data.song && data.song.id !== previousSongId) {
+      useHistoryStore.getState().logPlay(data.song);
+    }
     set({ ...data, volume: mpdToUi(data.volume) });
     updateLockScreen({
       title: data.song?.title ?? 'ThePod',

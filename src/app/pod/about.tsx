@@ -1,5 +1,5 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Palette } from '@/constants/theme';
+import { Palette, Font } from '@/constants/theme';
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { NavRow } from '@/components/ui/NavRow';
@@ -33,9 +33,9 @@ const s = StyleSheet.create({
 
   hero: { alignItems: 'center', paddingVertical: 28, gap: 10 },
   iconCircle: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: Palette.surfaceHigh, alignItems: 'center', justifyContent: 'center',
+    width: 64, height: 64,
+    backgroundColor: Palette.divider, alignItems: 'center', justifyContent: 'center',
   },
   iconText: { fontSize: 28, color: Palette.textSecondary },
-  name: { color: Palette.text, fontSize: 20, fontWeight: '700' },
+  name: { color: Palette.text, fontFamily: Font.heading, fontSize: 20 },
 });

@@ -206,11 +206,18 @@ class ThePodAdvertisement(dbus.service.Object):
     def GetAll(self, interface):
         if interface != LE_ADV_IFACE:
             raise dbus.exceptions.DBusException('org.bluez.Error.InvalidArguments')
+        # Legacy LE advertising has a hard 31-byte payload limit and this
+        # controller has no extended advertising. Budget:
+        #   flags 3 + 128-bit ServiceUUIDs 18 + LocalName "ThePod" 8 = 29.
+        # Adding 'Includes': ['tx-power'] costs 3 more = 32, one byte over, and
+        # BlueZ rejects the whole registration with org.bluez.Error.Failed —
+        # which leaves the Pod BR/EDR-discoverable (so it still shows in iOS
+        # Settings) but invisible to CoreBluetooth, i.e. to the app. Nothing
+        # reads tx-power: signal bars come from RSSI measured by the phone.
         return {
             'Type': dbus.String('peripheral'),
             'LocalName': dbus.String(DEVICE_NAME),
             'ServiceUUIDs': dbus.Array([dbus.String(SERVICE_UUID)], signature='s'),
-            'Includes': dbus.Array(['tx-power'], signature='s'),
         }
 
     @dbus.service.method(LE_ADV_IFACE)

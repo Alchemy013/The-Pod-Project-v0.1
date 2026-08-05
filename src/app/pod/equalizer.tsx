@@ -1,8 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SymbolView } from 'expo-symbols';
+import { Icon } from '@/components/ui/icons';
 import { podService } from '@/services/bluetooth/BluetoothService';
 import { usePodInfoStore, EqPreset } from '@/store/pod.store';
-import { Palette } from '@/constants/theme';
+import { Palette, Font } from '@/constants/theme';
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 
@@ -28,7 +28,7 @@ function PresetRow({ label, description, selected, onPress, last }: {
         <Text style={s.description}>{description}</Text>
       </View>
       {selected && (
-        <SymbolView name="checkmark" style={s.checkmark} type="monochrome" tintColor={Palette.accent} />
+        <Icon name="check" size={16} color={Palette.accent} />
       )}
     </Pressable>
   );
@@ -68,11 +68,10 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12, gap: 12,
   },
-  divider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Palette.surfaceHigh },
+  divider: { borderBottomWidth: 1, borderBottomColor: Palette.divider },
   pressed: { opacity: 0.6 },
   rowText: { flex: 1, gap: 2 },
-  label: { color: Palette.text, fontSize: 15.5, fontWeight: '500' },
-  description: { color: Palette.textSecondary, fontSize: 12.5 },
-  checkmark: { width: 16, height: 16 },
-  note: { color: Palette.textSecondary, fontSize: 12, textAlign: 'center', marginTop: 4, paddingHorizontal: 20 },
+  label: { color: Palette.text, fontFamily: Font.medium, fontSize: 15 },
+  description: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 12.5 },
+  note: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 12, textAlign: 'center', marginTop: 4, paddingHorizontal: 20 },
 });

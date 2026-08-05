@@ -27,8 +27,21 @@ class ThePodBluetoothService {
   private notificationListeners = new Set<NotificationListener>();
   private disconnectListeners = new Set<() => void>();
   private _isConnecting = false;
+  private _scanInFlight: Promise<Device[]> | null = null;
 
+  // CoreBluetooth allows a single scan per central manager, so a second
+  // startDeviceScan silently takes over the callback from the first. The
+  // earlier scan then resolves with an empty result that can overwrite the
+  // real device list. Share one in-flight scan between concurrent callers.
   async scan(): Promise<Device[]> {
+    if (this._scanInFlight) return this._scanInFlight;
+    this._scanInFlight = this._scanInternal().finally(() => {
+      this._scanInFlight = null;
+    });
+    return this._scanInFlight;
+  }
+
+  private async _scanInternal(): Promise<Device[]> {
     const state = await this.manager.state();
     if (state !== State.PoweredOn) {
       throw new Error('Bluetooth is not powered on');

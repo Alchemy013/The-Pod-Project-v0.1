@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Device } from 'react-native-ble-plx';
-import { SymbolView } from 'expo-symbols';
+import { Icon } from '@/components/ui/icons';
 import { useBluetoothStore } from '@/store/bluetooth.store';
 import { POD_DEVICE_NAME } from '@/services/bluetooth/protocol';
-import { Palette } from '@/constants/theme';
+import { Palette, Font } from '@/constants/theme';
 import { Sheet } from '@/components/ui/Sheet';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 
@@ -34,7 +34,7 @@ function DeviceRow({ device, state, onPress }: {
         </Text>
       </View>
       {state === 'connected' && (
-        <SymbolView name="checkmark" style={s.check} type="monochrome" tintColor={Palette.accent} />
+        <Icon name="check" size={18} color={Palette.accent} />
       )}
       {state === 'connecting' && <ActivityIndicator size="small" color={Palette.textSecondary} />}
     </Pressable>
@@ -117,14 +117,13 @@ const s = StyleSheet.create({
   },
   pressed: { opacity: 0.6 },
   icon: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: Palette.surfaceHigh, alignItems: 'center', justifyContent: 'center',
+    width: 40, height: 40,
+    backgroundColor: Palette.divider, alignItems: 'center', justifyContent: 'center',
   },
   iconText: { fontSize: 18, color: Palette.textSecondary },
   info: { flex: 1, gap: 2 },
-  name: { color: Palette.text, fontSize: 15, fontWeight: '500' },
-  namePod: { fontWeight: '700' },
-  status: { color: Palette.textMuted, fontSize: 12 },
-  check: { width: 18, height: 18 },
+  name: { color: Palette.text, fontFamily: Font.medium, fontSize: 15 },
+  namePod: { fontFamily: Font.bold },
+  status: { color: Palette.textMuted, fontFamily: Font.regular, fontSize: 12 },
   empty: { color: Palette.textSecondary, fontSize: 14, textAlign: 'center', paddingHorizontal: 30, paddingTop: 40 },
 });

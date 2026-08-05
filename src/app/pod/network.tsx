@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { podService } from '@/services/bluetooth/BluetoothService';
 import { usePodInfoStore } from '@/store/pod.store';
-import { Palette, Radius } from '@/constants/theme';
+import { Palette, Font } from '@/constants/theme';
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { RowTitle, RowSubtitle } from '@/components/ui/Row';
@@ -173,47 +173,47 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingBottom: 10,
   },
-  listHeaderTitle: { color: Palette.textSecondary, fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1.0 },
-  cancelText: { color: Palette.accent, fontSize: 15, fontWeight: '500' },
+  listHeaderTitle: { color: Palette.textSecondary, fontFamily: Font.bold, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.2 },
+  cancelText: { color: Palette.accent, fontFamily: Font.medium, fontSize: 15 },
 
   statusRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
   statusInfo: { flex: 1 },
-  signalBadge: { backgroundColor: Palette.surfaceHigh, borderRadius: Radius.sm, paddingHorizontal: 8, paddingVertical: 4 },
-  signalText: { color: Palette.textSecondary, fontSize: 12, fontWeight: '600' },
+  signalBadge: { borderWidth: 1, borderColor: Palette.divider, paddingHorizontal: 8, paddingVertical: 4 },
+  signalText: { color: Palette.textSecondary, fontFamily: Font.bold, fontSize: 12 },
 
   changeBtn: {
-    marginHorizontal: 20, paddingVertical: 12, borderRadius: Radius.md,
-    backgroundColor: Palette.surfaceHigh, alignItems: 'center', marginBottom: 10,
+    marginHorizontal: 20, paddingVertical: 13,
+    borderWidth: 2, borderColor: Palette.border, alignItems: 'center', marginBottom: 10,
   },
-  changeBtnText: { color: Palette.text, fontSize: 15, fontWeight: '600' },
-  note: { color: Palette.textSecondary, fontSize: 12, textAlign: 'center', paddingHorizontal: 20 },
+  changeBtnText: { color: Palette.text, fontFamily: Font.heading, fontSize: 12, letterSpacing: 1.0, textTransform: 'uppercase' },
+  note: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 12, textAlign: 'center', paddingHorizontal: 20 },
 
   netRow: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 20, paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Palette.surfaceHigh,
+    borderBottomWidth: 1, borderBottomColor: Palette.divider,
   },
   netInfo: { flex: 1 },
-  netSignal: { color: Palette.textSecondary, fontSize: 13 },
-  emptySub: { color: Palette.textSecondary, fontSize: 14, textAlign: 'center', paddingHorizontal: 20, paddingTop: 40 },
+  netSignal: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 13 },
+  emptySub: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 14, textAlign: 'center', paddingHorizontal: 20, paddingTop: 40 },
 
   pwdContainer: { flex: 1, backgroundColor: Palette.bg, padding: 24, gap: 16 },
-  pwdNetName: { color: Palette.text, fontSize: 20, fontWeight: '700', marginBottom: 4 },
+  pwdNetName: { color: Palette.text, fontFamily: Font.heading, fontSize: 20, marginBottom: 4 },
   pwdInput: {
-    backgroundColor: Palette.surfaceHigh, borderRadius: Radius.md, paddingHorizontal: 14,
-    paddingVertical: 12, color: Palette.text, fontSize: 16,
+    backgroundColor: Palette.bg, borderWidth: 2, borderColor: Palette.divider, paddingHorizontal: 14,
+    paddingVertical: 12, color: Palette.text, fontFamily: Font.regular, fontSize: 16,
   },
   errorText: { color: Palette.danger, fontSize: 13, marginTop: 8, textAlign: 'center' },
   pwdBtnRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
   backBtn: {
-    flex: 1, paddingVertical: 13, borderRadius: Radius.md,
-    borderWidth: 1, borderColor: Palette.surfaceHigh, alignItems: 'center',
+    flex: 1, paddingVertical: 13,
+    borderWidth: 2, borderColor: Palette.border, alignItems: 'center',
   },
-  backBtnText: { color: Palette.textSecondary, fontSize: 15, fontWeight: '500' },
+  backBtnText: { color: Palette.textSecondary, fontFamily: Font.medium, fontSize: 15 },
   connectBtn: {
-    flex: 2, paddingVertical: 13, borderRadius: Radius.md,
-    backgroundColor: Palette.text, alignItems: 'center', justifyContent: 'center',
+    flex: 2, paddingVertical: 13,
+    backgroundColor: Palette.accent, alignItems: 'center', justifyContent: 'center',
     minHeight: 46,
   },
-  connectBtnText: { color: Palette.bg, fontSize: 15, fontWeight: '700' },
+  connectBtnText: { color: Palette.accentText, fontFamily: Font.heading, fontSize: 13, letterSpacing: 1.0, textTransform: 'uppercase' },
 });

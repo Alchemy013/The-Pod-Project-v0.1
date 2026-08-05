@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { usePodInfoStore } from '@/store/pod.store';
-import { Palette } from '@/constants/theme';
+import { Palette, Font } from '@/constants/theme';
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { NavRow } from '@/components/ui/NavRow';
@@ -70,12 +70,12 @@ const s = StyleSheet.create({
   hero: { alignItems: 'center', paddingVertical: 36, gap: 10 },
   batteryIconWrap: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   batteryIcon: {
-    width: 90, height: 42, borderRadius: 8,
+    width: 90, height: 42,
     borderWidth: 3, borderColor: Palette.textSecondary,
     padding: 4, overflow: 'hidden',
   },
-  batteryFill: { height: '100%', backgroundColor: Palette.accent, borderRadius: 4 },
-  batteryNub: { width: 6, height: 18, backgroundColor: Palette.textSecondary, borderRadius: 2, marginLeft: 3 },
-  percent: { color: Palette.text, fontSize: 40, fontWeight: '800', letterSpacing: -0.5 },
-  status: { color: Palette.textSecondary, fontSize: 15 },
+  batteryFill: { height: '100%', backgroundColor: Palette.accent },
+  batteryNub: { width: 6, height: 18, backgroundColor: Palette.textSecondary, marginLeft: 3 },
+  percent: { color: Palette.text, fontFamily: Font.heading, fontSize: 40, letterSpacing: -0.5 },
+  status: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 15 },
 });
