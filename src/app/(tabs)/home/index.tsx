@@ -70,7 +70,10 @@ export default function HomeScreen() {
     return prefetchLibrary(songs, albums);
   }, [songs.length]);
 
-  const openAlbum = (id: string) => router.push(`/library/album/${id}`);
+  // Stays inside the Home stack. Pushing to `/library/album/<id>` navigated into
+  // the Library tab, which then stayed on that album — so tapping Library showed
+  // the record you were listening to rather than your library.
+  const openAlbum = (id: string) => router.push(`/home/album/${id}`);
 
   // "Recently played" is the local play log projected onto the library: the
   // Pod has no play history of its own (see history.store).

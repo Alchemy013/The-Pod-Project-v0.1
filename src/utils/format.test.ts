@@ -51,4 +51,9 @@ assert.equal(specOf(song(24, 88200)), '24/88.2');
 assert.equal(specOf(song(0, 44100)), null, 'missing depth → null');
 assert.equal(specOf(song(24, 0)), null, 'missing rate → null');
 
+// The one that actually bit: list rows call `specOf(album.songs[0])`, and with
+// `noUncheckedIndexedAccess` off TypeScript types that as `Song` even when the
+// array is empty. An unguarded read threw and took out the whole screen.
+assert.equal(specOf(undefined), null, 'undefined song → null, must not throw');
+
 console.log('format.ts — all assertions passed');

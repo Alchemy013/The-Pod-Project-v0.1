@@ -12,6 +12,9 @@ export default function HomeLayout() {
     >
       <Stack.Screen name="index" />
       <Stack.Screen name="history" />
+      {/* Home opens albums in its *own* stack. Pushing to /library/album/<id>
+          left the Library tab sitting on that album. */}
+      <Stack.Screen name="album/[id]" />
     </Stack>
   );
 }
