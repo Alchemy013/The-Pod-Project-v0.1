@@ -52,6 +52,7 @@ AGENT_MGR_IFACE      = 'org.bluez.AgentManager1'
 # Do not "simplify" this to btmgmt: instances die with that process, and
 # `btmgmt add-adv --help` hangs on this box.
 MGMT_OP_SET_CONNECTABLE = 0x0007
+MGMT_OP_SET_ADVERTISING = 0x0029
 MGMT_OP_ADD_ADVERTISING = 0x003E
 MGMT_EV_CMD_COMPLETE    = 0x0001
 MGMT_EV_CMD_STATUS      = 0x0002
@@ -134,6 +135,17 @@ def _advertise_via_mgmt(hci_index):
         # every connect times out after ~10s having never sent a CONNECT_IND,
         # with *zero* HCI events on the Pi to show for it. Do not drop this
         # call, and do not rely on `Discoverable=True` to imply it.
+        # Turn the *legacy* Set Advertising toggle off first. It is mutually
+        # exclusive with the per-instance advertising below and it wins, so
+        # while it is on the radio carries bluetoothd's own payload — local
+        # name and TX power, and **no service UUID** — instead of ours.
+        # bluetoothd persists this setting in /var/lib/bluetooth, so it
+        # survives reboots: clearing it by hand once is not enough, which is
+        # why this runs unconditionally on every start. Symptom when it is on:
+        # the Pod is discoverable and connectable under the right name, but a
+        # scan filtered on the service UUID finds nothing at all.
+        _mgmt_request(sock, MGMT_OP_SET_ADVERTISING, hci_index, b'\x00',
+                      'Set Advertising(off)')
         _mgmt_request(sock, MGMT_OP_SET_CONNECTABLE, hci_index, b'\x01',
                       'Set Connectable')
         _mgmt_request(sock, MGMT_OP_ADD_ADVERTISING, hci_index, params,

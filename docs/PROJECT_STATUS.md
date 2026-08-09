@@ -871,14 +871,42 @@ working again, which is also fine. The one line that means trouble is
 `[ADV] Legacy MGMT advertising ALSO failed`: then the Pod is **invisible to the
 app** even though `systemctl is-active` says `active`.
 
-Quick end-to-end check that the radio is actually advertising:
+✅ **The only trustworthy advertising check is a second radio.** The Pi cannot
+hear its own advertisements, and *every* Pi-side signal lies: see the two
+entries under "Solved". Scan from the Mac instead:
 
 ```bash
-sshpass -p '13root' ssh alcehmy@ThePod.local "sudo btmgmt info | grep 'current settings'"
+swiftc -O tools/blescan.swift -o /tmp/blescan && /tmp/blescan
 ```
 
-`advertising` must appear in the list; `bondable` must **not** (that is
-`Pairable=False` having taken effect).
+Healthy: `*** THEPOD name=ThePod rssi=-48 connectable=true uuids=["4FAFC201-…9001"]`.
+No `uuids` → legacy toggle is winning. Absent entirely → reboot the Pi.
+
+⚠️ **`btmgmt info` is NOT a valid advertising check.** Its `advertising` flag
+tracks only the *legacy* `Set Advertising` toggle (`HCI_ADVERTISING`); the
+per-instance advertising this firmware uses sets `HCI_ADVERTISING_INSTANCE`,
+which that bitmap does not report. A perfectly healthy Pod shows **no**
+`advertising` in `current settings`. Judging by it will send you chasing a
+non-existent bug — it did exactly that here.
+
+The authoritative check is the HCI trace. Note `btmon -w` (binary) loses its
+buffered tail when killed, and plain `btmon >file` block-buffers, so use
+`stdbuf`:
+
+```bash
+sudo stdbuf -oL btmon > /tmp/mon.txt 2>&1 &
+sudo systemctl restart thepod; sleep 12; sudo pkill -9 btmon
+grep -E 'LE Set Advertise Enable|Advertising:|Type:' /tmp/mon.txt
+```
+
+Healthy looks like `Type: Connectable undirected - ADV_IND (0x00)` followed by
+`Advertising: Enabled (0x01)` / `Status: Success`. `ADV_SCAN_IND` means the
+adapter lost `connectable` — see the entry under "Solved".
+
+A **missing** `LE Set Advertising Data` is normal and is *not* a fault: the
+kernel skips the write when its cached copy already matches, and
+`hdev->adv_data` survives both a `bluetoothctl power off/on` and a service
+restart. Only a reboot clears it.
 
 **Deployed 2026-08-10**: `gatt_server.py` — BR/EDR `Discoverable`/`Pairable`
 off, plus the legacy-MGMT advertising fallback. Verified on hardware across a
@@ -1010,6 +1038,26 @@ fallback registering unattended at boot.
     `btmon -w` + `pkill -INT btmon` (SIGTERM truncates the buffered tail).
   The D-Bus `RegisterAdvertisement` call is still tried **first**, so a future
   fixed BlueZ is picked up automatically and the fallback simply stops firing.
+- **Pod advertises, but with NO service UUID — so a UUID-filtered scan finds
+  nothing** → bluetoothd's **legacy `Set Advertising` toggle** was on, and it is
+  mutually exclusive with per-instance advertising *and wins*. The radio then
+  carries bluetoothd's payload (local name + TX power, no service UUID) instead
+  of ours. bluetoothd **persists this in `/var/lib/bluetooth`, so it survives
+  reboots** — clearing it once by hand is not enough, which is why
+  `_advertise_via_mgmt` now sends `Set Advertising(0x0029)=0` on every start.
+  This is the residue that `setup_eq.sh`'s `btmgmt advertising on` left behind,
+  and it is why the Pod stayed reachable for months while
+  `RegisterAdvertisement` was failing: the legacy advertisement was doing all
+  the work. Symptom is specific — Pod is discoverable and connectable under the
+  right name, but anything filtering on the service UUID sees nothing.
+- **The controller wedges after repeated advertising toggles.** During a long
+  debugging session the BCM43430B0 stopped radiating entirely while still
+  ACKing everything: `LE Set Advertising Data`, `ADV_IND`, `Advertise Enable:
+  Enabled`, all `Status: Success`, and nothing on the air. Once in that state
+  it also emitted a **3-byte flags-only** payload (no name, no UUID). No amount
+  of MGMT toggling recovers it — **only a reboot does**. So: after heavy
+  toggling, reboot *before* concluding a code change failed. Two hours went
+  into reading a wedged radio as a broken fix here.
 - **Pod visible in the app at full signal, but every connect times out after
   ~10s with ZERO HCI events on the Pi** → the adapter was not *connectable*, so
   the kernel was advertising **`ADV_SCAN_IND`** (scannable, non-connectable)

@@ -13,6 +13,21 @@ import {
 
 type NotificationListener = (response: PodResponse) => void;
 
+/**
+ * Is this scan result one of our Pods?
+ *
+ * Two independent signals, because on this hardware neither is guaranteed:
+ * the name rides the *scan response* and the service UUID rides the
+ * *advertisement*, and the firmware's advertising path has more than one way
+ * to end up publishing only one of them. Either alone identifies a Pod, so
+ * accept either rather than requiring both.
+ */
+function isPod(device: Device): boolean {
+  if (device.name === POD_DEVICE_NAME || device.localName === POD_DEVICE_NAME) return true;
+  const target = POD_SERVICE_UUID.toLowerCase();
+  return (device.serviceUUIDs ?? []).some((u) => u.toLowerCase() === target);
+}
+
 interface ChunkBuffer {
   parts: string[];
   total: number;
@@ -76,17 +91,19 @@ class ThePodBluetoothService {
     return new Promise((resolve) => {
       const found = new Map<string, Device>();
 
-      // Filtered on the Pod's service UUID rather than scanning everything and
-      // sorting after: an unfiltered scan surfaces every phone, TV and pair of
-      // earbuds in the room, which is noise no user of this app can act on.
-      // The firmware puts the 128-bit UUID in the *advertisement* (not the scan
-      // response), which is what CoreBluetooth matches on — keep it there.
-      this.manager.startDeviceScan([POD_SERVICE_UUID], { allowDuplicates: false }, (error, device) => {
+      // Scan unfiltered and match in JS, rather than passing the service UUID
+      // to startDeviceScan. Both hide the room's phones and TVs equally, but a
+      // radio-level filter makes *discovery itself* depend on the advertisement
+      // carrying the UUID — and if the Pod ever advertises without it the Pod
+      // simply cannot be found, with no way to tell that apart from "not
+      // powered on". Matching here degrades instead: the name in the scan
+      // response is enough on its own. Costs one extra predicate per packet.
+      this.manager.startDeviceScan(null, { allowDuplicates: false }, (error, device) => {
         if (error) {
           console.error('[BLE] Scan error:', error);
           return;
         }
-        if (!device) return;
+        if (!device || !isPod(device)) return;
         found.set(device.id, device);
       });
 
