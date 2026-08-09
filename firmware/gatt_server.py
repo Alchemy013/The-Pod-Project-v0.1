@@ -1,4 +1,9 @@
+import ctypes
 import json
+import socket
+import struct
+import uuid as uuidlib
+
 import dbus
 import dbus.mainloop.glib
 import dbus.service
@@ -17,6 +22,128 @@ LE_ADV_MGR_IFACE     = 'org.bluez.LEAdvertisingManager1'
 LE_ADV_IFACE         = 'org.bluez.LEAdvertisement1'
 AGENT_IFACE          = 'org.bluez.Agent1'
 AGENT_MGR_IFACE      = 'org.bluez.AgentManager1'
+
+# --- Legacy MGMT advertising fallback ---------------------------------------
+# BlueZ 5.82's LEAdvertisingManager1.RegisterAdvertisement is broken against
+# kernel 6.18 on this box, and it fails for *any* payload — even an empty one,
+# so this is not the 31-byte budget problem that bit us before. BlueZ picks the
+# extended-advertising MGMT path and sends Add Extended Advertising Data
+# (0x0055) with a parameter block 8 bytes longer than the lengths it declares:
+# it writes the 11-byte mgmt_cp_add_advertising header where the kernel parses
+# the 3-byte mgmt_cp_add_ext_adv_data one. The kernel enforces
+#   data_len == 3 + adv_data_len + scan_rsp_len
+# and rejects with Invalid Parameters (0x0d), leaving the Pod completely
+# invisible to CoreBluetooth while systemd still reports the service active.
+# Observed as plen 11 vs 3 (empty) and plen 37 vs 29 (real payload).
+#
+# The BCM43430B0 is HCI 4.2 and has no extended advertising at all, so nothing
+# is lost by using the legacy Add Advertising (0x003e) opcode, which this
+# controller accepts. There is no BlueZ update available to fix the D-Bus path
+# (5.82 is the newest in both Debian trixie and archive.raspberrypi.com), so
+# the fallback below drives MGMT directly.
+#
+# Two constraints that are easy to get wrong:
+#  * The advertising instance is owned by the MGMT socket that created it, so
+#    _mgmt_sock is kept alive for the life of the process. Closing it — or
+#    letting it get garbage collected — silently stops the advertisement.
+#  * CPython 3.13's AF_BLUETOOTH binder only accepts a 1-tuple and hardcodes
+#    HCI_CHANNEL_RAW, so there is no way to reach HCI_CHANNEL_CONTROL through
+#    socket.bind(). We bind through libc with a packed sockaddr_hci instead.
+# Do not "simplify" this to btmgmt: instances die with that process, and
+# `btmgmt add-adv --help` hangs on this box.
+MGMT_OP_SET_CONNECTABLE = 0x0007
+MGMT_OP_ADD_ADVERTISING = 0x003E
+MGMT_EV_CMD_COMPLETE    = 0x0001
+MGMT_EV_CMD_STATUS      = 0x0002
+HCI_DEV_NONE            = 0xFFFF
+HCI_CHANNEL_CONTROL     = 3
+MGMT_ADV_FLAG_CONNECTABLE = 1 << 0
+MGMT_ADV_FLAG_DISCOV      = 1 << 1
+
+AD_TYPE_UUID128_COMPLETE = 0x07
+AD_TYPE_NAME_COMPLETE    = 0x09
+
+_mgmt_sock = None
+
+
+def _adv_payload():
+    """Build (adv_data, scan_rsp) as raw AD structures for MGMT Add Advertising.
+
+    The kernel prepends the Flags AD itself when MGMT_ADV_FLAG_DISCOV is set,
+    which is why we must not add one here (and why the adv budget is 28, not
+    31). 128-bit UUIDs go on the wire least-significant byte first.
+    """
+    uuid_le = uuidlib.UUID(SERVICE_UUID).bytes[::-1]
+    adv_data = bytes([len(uuid_le) + 1, AD_TYPE_UUID128_COMPLETE]) + uuid_le
+    name = DEVICE_NAME.encode('utf-8')
+    scan_rsp = bytes([len(name) + 1, AD_TYPE_NAME_COMPLETE]) + name
+    return adv_data, scan_rsp
+
+
+def _mgmt_request(sock, opcode, hci_index, params, what):
+    """Send one MGMT command and block until its completion event arrives."""
+    sock.sendall(struct.pack('<HHH', opcode, hci_index, len(params)) + params)
+    sock.settimeout(5)
+    while True:
+        pkt = sock.recv(1024)
+        event, index, plen = struct.unpack('<HHH', pkt[:6])
+        body = pkt[6:6 + plen]
+        if index != hci_index or len(body) < 3:
+            continue
+        if event not in (MGMT_EV_CMD_COMPLETE, MGMT_EV_CMD_STATUS):
+            continue
+        if struct.unpack('<H', body[:2])[0] != opcode:
+            continue
+        if body[2] != 0:
+            raise OSError(f'MGMT {what} rejected: 0x{body[2]:02x}')
+        return
+
+
+def _advertise_via_mgmt(hci_index):
+    """Register a connectable advertisement over the legacy MGMT opcode."""
+    global _mgmt_sock
+
+    adv_data, scan_rsp = _adv_payload()
+    params = struct.pack(
+        '<BIHHBB',
+        1,                                                     # instance
+        MGMT_ADV_FLAG_CONNECTABLE | MGMT_ADV_FLAG_DISCOV,      # flags
+        0, 0,                                                  # duration, timeout
+        len(adv_data), len(scan_rsp),
+    ) + adv_data + scan_rsp
+
+    sock = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_RAW, socket.BTPROTO_HCI)
+    try:
+        libc = ctypes.CDLL('libc.so.6', use_errno=True)
+        sockaddr_hci = struct.pack(
+            '<HHH', socket.AF_BLUETOOTH, HCI_DEV_NONE, HCI_CHANNEL_CONTROL
+        )
+        if libc.bind(sock.fileno(), sockaddr_hci, len(sockaddr_hci)) != 0:
+            raise OSError(ctypes.get_errno(), 'bind to MGMT control channel failed')
+
+        # Claim connectability explicitly, and do it *before* adding the
+        # instance. bluetoothd only keeps the adapter connectable while it
+        # believes something needs it — a registered D-Bus advertisement or a
+        # discoverable adapter. Ours is registered behind its back over MGMT
+        # and `_set_discoverable` turns both `Discoverable` and `Pairable` off,
+        # so bluetoothd concludes nothing needs connections and issues
+        # Set Connectable(off). The kernel then downgrades LE advertising from
+        # ADV_IND to **ADV_SCAN_IND** and switches to a random address.
+        # That failure is vicious because the Pod still looks perfectly healthy:
+        # iOS discovers it, shows the right name and a strong RSSI, and then
+        # every connect times out after ~10s having never sent a CONNECT_IND,
+        # with *zero* HCI events on the Pi to show for it. Do not drop this
+        # call, and do not rely on `Discoverable=True` to imply it.
+        _mgmt_request(sock, MGMT_OP_SET_CONNECTABLE, hci_index, b'\x01',
+                      'Set Connectable')
+        _mgmt_request(sock, MGMT_OP_ADD_ADVERTISING, hci_index, params,
+                      'Add Advertising')
+    except Exception:
+        sock.close()
+        raise
+
+    # Held for the process lifetime — the instance dies with the socket.
+    _mgmt_sock = sock
 
 
 class AutoPairAgent(dbus.service.Object):
@@ -241,12 +368,21 @@ def _set_discoverable(bus, adapter_path):
     )
     try:
         adapter_props.Set('org.bluez.Adapter1', 'Alias', dbus.String(DEVICE_NAME))
-        adapter_props.Set('org.bluez.Adapter1', 'Discoverable', dbus.Boolean(True))
-        adapter_props.Set('org.bluez.Adapter1', 'DiscoverableTimeout', dbus.UInt32(0))
-        adapter_props.Set('org.bluez.Adapter1', 'Pairable', dbus.Boolean(True))
-        print(f'[ADV] Adapter set discoverable as "{DEVICE_NAME}"')
+
+        # BR/EDR discoverable + pairable is deliberately OFF. It is a separate
+        # path from LE advertising (which RegisterAdvertisement handles, and
+        # which is the only thing CoreBluetooth sees), so turning it off costs
+        # the app nothing. Leaving it on is what made iOS show its "ThePod
+        # would like to pair" dialog on every connect: a permanently pairable
+        # classic device invites a bond the protocol never asks for. No
+        # characteristic in this service uses encrypt-*/secure-* flags, so
+        # there is nothing here that requires an encrypted link — and an
+        # unbonded BLE peripheral still auto-reconnects by identifier.
+        adapter_props.Set('org.bluez.Adapter1', 'Discoverable', dbus.Boolean(False))
+        adapter_props.Set('org.bluez.Adapter1', 'Pairable', dbus.Boolean(False))
+        print(f'[ADV] Adapter alias "{DEVICE_NAME}" (BR/EDR pairing disabled)')
     except Exception as e:
-        print(f'[ADV] Warning: could not set discoverable: {e}')
+        print(f'[ADV] Warning: could not configure adapter: {e}')
 
 
 def start_server(command_handler):
@@ -269,15 +405,27 @@ def start_server(command_handler):
         error_handler=lambda e: print(f'[GATT] Registration error: {e}'),
     )
 
-    _set_discoverable(bus, adapter_path)
+    # Register advertisement via D-Bus — works headless, no btmgmt/TTY needed.
+    # This is the preferred path and stays first so that a fixed BlueZ is used
+    # automatically; on this box it fails and we fall back to raw MGMT. See the
+    # long comment on _advertise_via_mgmt for why.
+    hci_index = int(adapter_path.rsplit('hci', 1)[1])
 
-    # Register advertisement via D-Bus — works headless, no btmgmt/TTY needed
+    def _on_adv_error(e):
+        print(f'[ADV] D-Bus advertisement failed ({e})')
+        try:
+            _advertise_via_mgmt(hci_index)
+            print('[ADV] Advertisement registered (legacy MGMT fallback)')
+        except Exception as exc:
+            print(f'[ADV] Legacy MGMT advertising ALSO failed: {exc} — '
+                  f'the Pod will be invisible to the app')
+
     adv = ThePodAdvertisement(bus)
     adv_mgr = dbus.Interface(bus.get_object(BLUEZ_SVC, adapter_path), LE_ADV_MGR_IFACE)
     adv_mgr.RegisterAdvertisement(
         dbus.ObjectPath(ThePodAdvertisement.PATH), {},
         reply_handler=lambda: print('[ADV] Advertisement registered'),
-        error_handler=lambda e: print(f'[ADV] Advertisement error: {e}'),
+        error_handler=_on_adv_error,
     )
 
     agent = AutoPairAgent(bus)
@@ -285,6 +433,12 @@ def start_server(command_handler):
     agent_mgr.RegisterAgent(dbus.ObjectPath(AutoPairAgent.PATH), 'NoInputNoOutput')
     agent_mgr.RequestDefaultAgent(dbus.ObjectPath(AutoPairAgent.PATH))
     print('[AGENT] Auto-pair agent registered')
+
+    # Must run *after* RequestDefaultAgent: bluetoothd turns Pairable back on
+    # when a default agent is installed, so setting it earlier silently loses
+    # the race and leaves the adapter pairable (verified on hardware — the
+    # property read back True until this call was moved down here).
+    _set_discoverable(bus, adapter_path)
 
     def _on_device_properties_changed(interface, changed, invalidated, path):
         if interface == 'org.bluez.Device1' and 'Connected' in changed:
@@ -302,3 +456,17 @@ def start_server(command_handler):
     mainloop = GLib.MainLoop()
     print(f'[ThePod] GATT server running as "{DEVICE_NAME}"')
     mainloop.run()
+
+
+if __name__ == '__main__':
+    # Self-check for the advertising payload: `python3 gatt_server.py`.
+    # Cheap guard on the byte layout the controller actually rejects on.
+    _adv, _rsp = _adv_payload()
+    assert struct.calcsize('<BIHHBB') == 11, 'mgmt_cp_add_advertising must pack to 11 bytes'
+    assert _adv == bytes([17, AD_TYPE_UUID128_COMPLETE]) + uuidlib.UUID(SERVICE_UUID).bytes[::-1]
+    assert _adv[0] == len(_adv) - 1, 'AD length byte counts type + value, not itself'
+    assert _rsp[0] == len(_rsp) - 1 and _rsp[2:].decode() == DEVICE_NAME
+    # The kernel prepends its own 3-byte Flags AD when MGMT_ADV_FLAG_DISCOV is set.
+    assert len(_adv) <= 31 - 3, f'adv data {len(_adv)}B overruns the legacy 31-byte limit'
+    assert len(_rsp) <= 31, f'scan response {len(_rsp)}B overruns the legacy 31-byte limit'
+    print(f'self-check OK — adv {len(_adv)}B, scan_rsp {len(_rsp)}B')

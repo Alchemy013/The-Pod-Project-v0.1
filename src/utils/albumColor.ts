@@ -1,19 +1,19 @@
-// Hashed colour field: every album/artist gets a stable {bg, fg} pair and a
-// single initial letter instead of real artwork until art actually loads.
-const PALETTE = [
-  { bg: '#32271b', fg: '#c68439' },
-  { bg: '#321b2a', fg: '#c63995' },
-  { bg: '#1b321c', fg: '#39c63e' },
-  { bg: '#1b2032', fg: '#395ac6' },
-  { bg: '#1b322e', fg: '#39c6ae' },
-  { bg: '#1b3222', fg: '#39c663' },
-] as const;
-
-export function getAlbumColor(key: string) {
+// Every record gets one stable hue derived from its id/title. The v2 design
+// bleeds that hue into album, playlist and player headers ("colour wash"), so
+// a single number drives the art block, the header gradient and the accent
+// ring — no artwork required, and real art just layers on top when it lands.
+export function hueFor(key: string): number {
   let hash = 0;
   for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
-  return PALETTE[hash % PALETTE.length];
+  return hash % 360;
 }
+
+/** Saturated line colour — the ring inside art blocks, genre tiles. */
+export const ringColor = (hue: number) => `hsl(${hue}, 44%, 54%)`;
+/** Darkest step of the art gradient. */
+export const tintColor = (hue: number) => `hsl(${hue}, 28%, 11%)`;
+/** Lightest step — also the top colour of a header wash. */
+export const washColor = (hue: number) => `hsl(${hue}, 38%, 20%)`;
 
 export function getInitial(title: string) {
   return title.trim().charAt(0).toUpperCase() || '?';

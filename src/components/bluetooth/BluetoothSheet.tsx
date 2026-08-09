@@ -4,7 +4,7 @@ import { Device } from 'react-native-ble-plx';
 import { Icon } from '@/components/ui/icons';
 import { useBluetoothStore } from '@/store/bluetooth.store';
 import { POD_DEVICE_NAME } from '@/services/bluetooth/protocol';
-import { Palette, Font } from '@/constants/theme';
+import { Palette, Font, Radius } from '@/constants/theme';
 import { Sheet } from '@/components/ui/Sheet';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 
@@ -25,12 +25,14 @@ function DeviceRow({ device, state, onPress }: {
       disabled={state === 'connecting'}
     >
       <View style={s.icon}>
-        <Text style={s.iconText}>{isPod ? '◉' : '○'}</Text>
+        <View style={[s.iconRing, { borderColor: isPod ? Palette.accent : Palette.textSecondary }]}>
+          {isPod && <View style={s.iconDot} />}
+        </View>
       </View>
       <View style={s.info}>
         <Text style={[s.name, isPod && s.namePod]} numberOfLines={1}>{name}</Text>
         <Text style={s.status}>
-          {state === 'connected' ? 'Connected' : state === 'connecting' ? 'Connecting…' : 'Not Connected'}
+          {state === 'connecting' ? 'Connecting…' : device.id}
         </Text>
       </View>
       {state === 'connected' && (
@@ -81,10 +83,10 @@ export function BluetoothSheet({ visible, onClose }: { visible: boolean; onClose
         ListHeaderComponent={
           isConnected && device ? (
             <>
-              <SectionHeader>My Devices</SectionHeader>
+              <SectionHeader>My devices</SectionHeader>
               <DeviceRow device={device} state="connected" onPress={() => handlePress(device)} />
               <View style={{ height: 20 }} />
-              <SectionHeader>Other Devices</SectionHeader>
+              <SectionHeader>Other devices</SectionHeader>
             </>
           ) : null
         }
@@ -108,22 +110,28 @@ export function BluetoothSheet({ visible, onClose }: { visible: boolean; onClose
 
 const s = StyleSheet.create({
   subtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, marginBottom: 14 },
-  subtitle: { color: Palette.textSecondary, fontSize: 13 },
-  error: { color: Palette.danger, fontSize: 13, paddingHorizontal: 20, marginBottom: 10 },
+  subtitle: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 13 },
+  error: { color: Palette.danger, fontFamily: Font.regular, fontSize: 13, paddingHorizontal: 20, marginBottom: 10 },
 
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 20, paddingVertical: 12,
+    marginHorizontal: 20, marginBottom: 10, padding: 14,
+    backgroundColor: Palette.surface, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Palette.rail,
   },
   pressed: { opacity: 0.6 },
   icon: {
-    width: 40, height: 40,
-    backgroundColor: Palette.divider, alignItems: 'center', justifyContent: 'center',
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: Palette.control, alignItems: 'center', justifyContent: 'center',
   },
-  iconText: { fontSize: 18, color: Palette.textSecondary },
-  info: { flex: 1, gap: 2 },
+  iconRing: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  iconDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Palette.accent },
+  info: { flex: 1, gap: 3 },
   name: { color: Palette.text, fontFamily: Font.medium, fontSize: 15 },
-  namePod: { fontFamily: Font.bold },
-  status: { color: Palette.textMuted, fontFamily: Font.regular, fontSize: 12 },
-  empty: { color: Palette.textSecondary, fontSize: 14, textAlign: 'center', paddingHorizontal: 30, paddingTop: 40 },
+  namePod: { fontFamily: Font.heading },
+  status: { color: Palette.textMuted, fontFamily: Font.mono, fontSize: 11 },
+  empty: {
+    color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 14,
+    textAlign: 'center', paddingHorizontal: 30, paddingTop: 40,
+  },
 });

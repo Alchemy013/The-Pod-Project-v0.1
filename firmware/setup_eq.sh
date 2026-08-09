@@ -24,6 +24,5 @@ echo "[EQ] Restarting MPD and ThePod..."
 sudo systemctl restart mpd
 sleep 2
 sudo systemctl restart thepod
-sudo btmgmt advertising on
 
 echo "[EQ] Done. Run 'amixer -D equal' to verify EQ controls are present."

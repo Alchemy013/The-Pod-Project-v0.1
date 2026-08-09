@@ -32,7 +32,7 @@ export function Sheet({ visible, onClose, title, children }: {
 
 const s = StyleSheet.create({
   sheet: { flex: 1, backgroundColor: Palette.bg, paddingTop: 12 },
-  handle: { width: 36, height: 4, backgroundColor: Palette.divider, alignSelf: 'center', marginBottom: 16 },
+  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: Palette.control, alignSelf: 'center', marginBottom: 16 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 8 },
-  title: { color: Palette.text, fontFamily: Font.bold, fontSize: 18 },
+  title: { color: Palette.text, fontFamily: Font.heading, fontSize: 20 },
 });

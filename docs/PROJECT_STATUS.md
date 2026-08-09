@@ -8,10 +8,26 @@ Still open the actual file before editing it — this doc is orientation, not
 a substitute for reading the code you're about to change. Update it whenever
 something below goes stale — don't let it rot.
 
-Last full code read: **2026-08-05** (against uncommitted work on branch
-`fresh`, HEAD `fa81961`). Same day: verified on real hardware — app installed
-as a native Release build on an iPhone 16 Pro (no Metro), Pod discovered and
-connected over BLE, firmware deployed to the Pi.
+Last full code read: **2026-08-08** (against uncommitted work on branch
+`fresh`, HEAD `9e61406`). Verified that day by `tsc --noEmit` and a full
+`expo export --platform ios` bundle, **not** on hardware. Last hardware run was
+2026-08-05: native Release build on an iPhone 16 Pro (no Metro), Pod discovered
+and connected over BLE, firmware deployed to the Pi.
+
+⚠️ **The "Modernist" visual language described in older revisions of this doc is
+gone.** The app was redesigned again — to the **v2 "feed-led" language** sourced
+from the Claude Design project *Mobile app design system* (`ThePod App v2`).
+Spline Sans, rounded surfaces, colour wash, four tabs Home/Search/Library/Pod.
+Anything below that says Archivo, zero-radius, or "rules instead of cards" has
+been corrected; if you find a leftover, it's a doc bug, trust `theme.ts`.
+
+⚠️ **`ThePod_Project_Specification_v0.1.pdf` (in the design bundle) describes a
+different, future device**: Prototype 2 on an **ESP32-S3**, and it states the
+Raspberry Pi platform "is not carried forward in any form". Everything in this
+repo — firmware, MPD, BLE protocol — is Prototype 1, which that spec marks
+complete. Don't treat the PDF as a description of this codebase; its §8 BLE
+protocol is a *proposal* that does not match `protocol.ts`, and its §9.1 still
+says NativeWind, which was removed in `a437a6a`.
 
 ## What this is
 
@@ -55,25 +71,32 @@ screen and `docs/PROJECT_OVERVIEW.md` were already right. Don't re-open this.
 ## Repo layout
 
 ```
-src/app/                          # expo-router screens (4 tabs: library/playing/history/pod)
+src/app/                          # expo-router screens
+  index.tsx                       # Redirect to /home — src/app MUST have an index route
   _layout.tsx                     # fonts, splash, ErrorBoundary, BLE notification sync,
-                                  #   gates PairingScreen vs AppTabs on connection state
-  library/    _layout.tsx, index.tsx, search.tsx (modal), album/[id].tsx
-  playing/    _layout.tsx, index.tsx (Now Playing, 3 styles), queue.tsx
-  history/    _layout.tsx, index.tsx
-  pod/        _layout.tsx (native Stack w/ headers), index, network, equalizer,
-              storage, battery, about
+                                  #   gates Onboarding vs PairingScreen vs the root Stack
+  (tabs)/                         # the 3 tabs; a group, so hrefs stay /home /library /pod
+    _layout.tsx                   #   re-exports AppTabs + `unstable_settings.anchor`
+    home/       _layout.tsx, index.tsx (the feed), history.tsx
+    library/    _layout.tsx, index.tsx (Songs/Albums/Artists + search), album/[id].tsx
+    pod/        _layout.tsx (native Stack w/ headers), index, network, equalizer,
+                storage, battery, about
+  playing/    _layout.tsx, index.tsx (Now Playing), queue.tsx
+                                  #   NOT a tab — presented as a modal sheet over (tabs)
 src/components/
   app-tabs.tsx                    # custom tab bar via expo-router/ui (Tabs/TabTrigger/TabSlot)
-  MiniPlayer.tsx                  # above the tab bar, hidden on /playing
+  MiniPlayer.tsx                  # above the tab bar, always mounted
   PairingScreen.tsx               # full-screen scan/connect flow when disconnected
+  Onboarding.tsx                  # 3-panel first-run intro, gated on thepod_onboarded
   ErrorBoundary.tsx               # release builds have no red-box; this shows the stack
-  ui/  icons.tsx (inline SVG icon set), AlbumArt.tsx, Card, NavRow, Row,
-       SectionHeader, Sheet, EmptyState (unused)
+  ui/  controls.tsx (the v2 kit), icons.tsx (inline SVG), AlbumArt.tsx,
+       Card, NavRow, Row, SectionHeader, Sheet, EmptyState (unused)
   bluetooth/BluetoothSheet.tsx
 src/store/                        # zustand stores
   bluetooth.store.ts, library.store.ts, player.store.ts, pod.store.ts,
   history.store.ts                # local-only play history (AsyncStorage)
+  art.store.ts                    # album-art cache (memory + disk) + BLE prefetch
+  app.store.ts                    # onboarding flag + the global "Reset app"
 src/services/bluetooth/
   BluetoothService.ts             # BLE transport singleton (podService)
   protocol.ts                     # UUIDs, PodCommand/PodResponse types, base64 codec
@@ -97,6 +120,41 @@ firmware/
 plugins/withPodDeploymentTarget.js   # Podfile post_install deployment-target patch
 Design.pdf, Design2.pdf              # design source for the current visual language (untracked)
 ```
+
+## What goes in the repo (and what never does)
+
+`.gitignore` is the enforcement; this is the *why*, so a judgement call about a
+new file has an answer. When in doubt: **if a clean checkout plus
+`npm install` can regenerate it, it does not belong in git.**
+
+**Committed:**
+
+| Path | Note |
+|---|---|
+| `src/` | app source |
+| `firmware/*.py`, `*.sh`, `requirements.txt` | deployed to the Pi by hand — see Deploy |
+| `plugins/` | config plugins; `withPodDeploymentTarget.js` is required to build iOS |
+| `assets/` | incl. `audio/silence_long.wav` (4.6MB) — **runtime-required**, the lock-screen session depends on it, don't "clean it up" |
+| `docs/`, `README.md` | |
+| `app.json`, `package.json`, `package-lock.json`, `tsconfig.json` | lockfile committed on purpose — builds must be reproducible |
+
+**Never committed:**
+
+| Path | Why |
+|---|---|
+| `/ios`, `/android` | generated. `npx expo prebuild` rebuilds them; committing them means every dependency bump lands as an unreviewable native diff |
+| `node_modules/`, `.expo/`, `dist/`, `web-build/`, `expo-env.d.ts` | generated |
+| `firmware/__pycache__/`, `brag-output/` | generated |
+| `.claude/`, `CLAUDE.md`, `AGENTS.md` | dev tooling, not the project |
+| `*.jks` `*.p8` `*.p12` `*.key` `*.mobileprovision` `*.pem` | **signing material — a leak here is unrecoverable, you re-key** |
+| `.env*.local` | secrets |
+| `Design.pdf`, `Design2.pdf` | multi-MB binaries, and a *superseded* direction (the v2 language came from the Claude Design project, not these). Binaries are near-impossible to remove from history later — keep design sources out of git |
+
+⚠️ **Before this repo is ever made public or shared:** `docs/PROJECT_STATUS.md`
+contains the Pi's SSH password in plaintext (`sshpass -p '13root'`, several
+occurrences) and it is **already in committed history**, so deleting the line
+is not enough — it needs a history rewrite *and* a password change on the Pi.
+Fine while the repo is private; a blocker the moment it isn't.
 
 ## BLE protocol contract (`protocol.ts` / `config.py` — must stay in sync)
 
@@ -155,75 +213,137 @@ through to `notificationListeners`.
 ### Navigation & shell
 
 - **`src/app/_layout.tsx`** is the whole app shell:
-  - Loads 4 Archivo weights via `useFonts`; **3s timeout fallback** so a
-    stuck/rejected font promise can't permanently blank the app
-    (`ready = fontsLoaded || fontError || fontTimedOut`), then
-    `SplashScreen.hideAsync()`.
+  - Loads 4 Spline Sans weights via `useFonts`; **3s timeout fallback** so a
+    stuck/rejected font promise can't permanently blank the app, then
+    `SplashScreen.hideAsync()`. `ready` also waits on the `thepod_onboarded`
+    read, so the splash covers it rather than onboarding flashing over an
+    already-set-up app. A failed read is treated as "already seen" — a storage
+    error must never trap a returning user behind onboarding.
   - `TrackPlayer.registerPlaybackService(...)` at module scope (required by
     RNTP — must run before the player is set up).
   - Wraps everything in `GestureHandlerRootView` → `ErrorBoundary` →
     `SafeAreaProvider` → `ThemeProvider(DarkTheme)`.
-  - **Connection gate**: renders `<AppTabs />` only when
-    `connectionState === 'connected'`, otherwise `<PairingScreen />`. There is
-    no "browse while disconnected" mode — losing BLE returns you to pairing.
+  - **Three-way gate**, in order: `<Onboarding />` if `thepod_onboarded` is
+    unset, else `<AppTabs />` if `connectionState === 'connected'`, else
+    `<PairingScreen />`. There is no "browse while disconnected" mode — losing
+    BLE returns you to pairing. Onboarding sits *outside* the connection gate
+    on purpose: it must be able to run before any BLE call, because the iOS
+    permission prompt is fired by `PairingScreen`'s scan and the last panel
+    exists to give that prompt a reason. This is safe because `autoConnect()`
+    returns early when no device id is saved, so a fresh install touches no BLE
+    API until onboarding is dismissed.
   - `<NotificationSync />` (renders null) calls `autoConnect()` +
     `setupLockScreen()` once, subscribes `podService.onDisconnect` →
     `setDisconnected()`, and pipes unsolicited `NOW_PLAYING` notifications into
     `player.applyNowPlaying`. **This is the single wiring point for the Pi's
     idle-watcher push** — the doc-level "wired up elsewhere" is here.
+  - When connected it renders a **root `<Stack>`** with exactly two screens:
+    `(tabs)` and `playing` (`presentation: 'modal'`). Now Playing is therefore
+    a card **over** the tab navigator, not a member of it — see the
+    tab-route-order entry under "Solved" for why that distinction is load-bearing
+    and not a stylistic choice.
+- **`src/app/(tabs)/_layout.tsx`** is a two-line file that re-exports
+  `AppTabs` — it exists to own **`export const unstable_settings = { anchor:
+  'home' }`**, which must live in the route file, not in the component. Deleting
+  it silently moves the launch tab to Pod.
+- **`components/PairingScreen.tsx`** has **two modes off one saved value**
+  (`thepod_device_id`), and the distinction is the whole UX:
+  - **No Pod paired** → the device picker: scan, list, tap to adopt. This is
+    the *only* time a list is shown.
+  - **A Pod paired** → a status screen with no list at all. It reads
+    "Connecting to ThePod…" and the standing reconnect does the work, so
+    reopening the app just connects. When the link is down (e.g. the user
+    disconnected from iOS Settings) the single CTA is "Connect to ThePod".
+  Until the saved id has been read the mode is `null` and neither renders —
+  committing early would flash a device picker at someone who owns a Pod.
+  "Pair a different Pod" is a quiet text link, not a second button; the point
+  of the paired mode is that the common case offers no choices.
 - **`components/app-tabs.tsx`**: tab bar is hand-built on `expo-router/ui`
   (`Tabs`/`TabSlot`/`TabTrigger`), not the standard `<Tabs>` navigator. The
   real `<TabList>` is rendered with `display:'none'` purely to register the
-  four routes; the visible bar is a plain `View` of `TabTrigger`s above it, so
+  three routes; the visible bar is a plain `View` of `TabTrigger`s above it, so
   active state comes from `usePathname().startsWith(href)`. `MiniPlayer` sits
-  between `TabSlot` and the bar, hidden on `/playing`.
-- Each tab has its own `Stack`. `library` and `playing`/`history` use
-  `headerShown:false` (screens draw their own big titles); `pod/_layout.tsx`
-  uses real native headers with `headerLargeTitleEnabled` on the index.
-  `library/search` is `presentation:'modal'`.
+  between `TabSlot` and the bar and is **always mounted** — the sheet covers it,
+  so unmounting it only cost a layout pass on the card behind the sheet.
+  `options={{ backBehavior: 'history' }}`: the default `firstRoute` sends every
+  cross-tab back to one fixed tab.
+- Each tab has its own `Stack`, all with `headerShown:false` (screens draw
+  their own titles) except `pod/_layout.tsx`, which uses real native headers
+  with `headerLargeTitleEnabled` on the index. Search is **inside Library**, not
+  a tab.
 
 ### Screens
 
-- **`library/index.tsx`**: three tabs (`albums` default, `songs`, `artists`),
-  albums in a 2-col grid (`cardSize = (width - 40 - 2)/2`), A–Z ↔ Recent sort
-  toggle (Recent sorts by the max `dateAdded` across an album's songs).
-  Tapping an artist sets an in-screen `artistFilter` and switches to the album
-  grid with a breadcrumb — it is **not** a route. Album art is prefetched by
-  two sequential background loops (`fetchSongArt` small/48px,
-  `fetchAlbumArt` large) guarded by **module-level** `Set`s (`artFetched`,
-  `albumArtFetched`) so remounts don't refetch; they're deliberately
-  sequential to avoid flooding BLE. Long-press a song → Add to Queue / Delete.
+- **`home/index.tsx`** — the v2 feed, and the app's landing route. A
+  `HeaderWash` seeded off the first quick-pick, a greeting that keys off the
+  clock, a 2×2 grid of quick picks, then horizontal shelves: Recently played,
+  More from *artist*, Recently added, Hi-res on the Pod. Two things to know:
+  - **"Recently played" is the local play log projected onto the library.** The
+    Pod has no play history of its own (see `history.store`), so this is the
+    app's own record, not the device's.
+  - **"More from *artist*" is deliberately not a recommendation.** It's
+    same-artist albums off the last thing played — the honest version of a
+    recommendation shelf with no listening model behind it. Don't dress it up.
+  - Art prefetch is kicked off here once via `art.store.prefetchLibrary`.
+- **`home/history.tsx`**: `SectionList` grouped Today/Yesterday/weekday/date,
+  plus a "This year on the Pod" stat block (plays, records added, never-played
+  albums, listening hours) computed from history × library. Reached from the
+  Recently-played shelf's "See all", not from a tab.
+- **`library/index.tsx`** — three chips, **Songs (default) / Albums /
+  Artists**, as flat rows. **Search lives here, not in its own tab**: a field
+  under the title filters whichever list is showing, so there is one
+  destination instead of two showing the same records. `src/app/search/` was
+  deleted and the tab bar went from four tabs to three.
+  - The matcher special-cases `hi-res`/`hires` as a **format filter** (bit
+    depth >16 or sample rate >48 kHz) rather than a substring nothing would
+    ever match — it's the one query users type that isn't a name.
+  - Recent searches persist in `thepod_recent_searches` (max 8) and surface as
+    tappable chips on the Songs tab when the field is empty.
+  - A–Z ↔ Recently-added sort toggle over albums (Recent sorts by max
+    `dateAdded` across the album's songs). Tapping an artist sets an in-screen
+    `artistFilter` and shows their albums behind a breadcrumb — it is **not** a
+    route. Artists render as a circular hue mark with their initial, visually
+    distinct from the square record blocks in the same list.
 - **`library/album/[id].tsx`**: looks the album up in the already-loaded
   library store by id (no fetch); Play / Shuffle (Shuffle sends
   `SHUFFLE{enabled:true}` *then* `PLAY_ALBUM`).
-- **`library/search.tsx`**: pure client-side filter over the loaded library
-  (title/artist/album substring), one "top result" album, recent searches
-  persisted in AsyncStorage (`thepod_recent_searches`, max 8).
-- **`playing/index.tsx`** (527 lines, the biggest file): **three switchable
-  layouts** — `grid` (default, square art + transport grid), `poster`
-  (accent-red full-bleed, oversized title), `console` (compact art + format
-  telemetry). Cycled by the `layout` icon, persisted in AsyncStorage
-  (`thepod_now_playing_style`). Shared internals:
-  - `SeekBar` is a hand-rolled responder-based scrubber (no slider dep):
-    tracks width via `onLayout`, drags to a local `dragPos`, commits on release.
+- **`playing/index.tsx`**: **one** layout now — the three switchable
+  grid/poster/console styles and the `thepod_now_playing_style` key are gone.
+  Full-bleed hue wash behind square art, oversized title, circular accent FAB,
+  format badges (`FLAC`, `24/192`, `PCM5122`, `Bit-perfect`) along the bottom.
+  - Presented as a **modal sheet** off the root Stack, so the vertical axis
+    belongs to the system's interactive dismiss. `insets.top` is 0 in a sheet;
+    the nav row pads itself.
+  - Seek and volume are both `ui/controls.tsx` **`Scrubber`**s — one component,
+    two labels. The caller owns the `fraction` shared value so `LiveText` can
+    read it without a re-render, and **nothing in a drag touches the JS
+    thread**. Volume passes `liveMs={120}` (you have to hear it to aim); seek
+    doesn't, because a live seek is a BLE write per frame.
   - `displayPosition` ticks locally every 1s while playing (BLE only pushes on
     real events); when it reaches `duration` it schedules a `refresh()` 1.5s
-    later to pick up the next track.
-  - Volume drag is debounced 120ms before hitting BLE; `localVolume` is the
-    optimistic value.
+    later to pick up the next track. `seekFrac` is driven from it with a **1s
+    linear `withTiming`**, so the bar glides between ticks rather than stepping;
+    a delta over 2s is a seek or a track change and snaps instead.
+  - `scrubbing` / `volScrubbing` refs stop those two effects writing the shared
+    value out from under a thumb that is already on the bar.
   - Album art fetched per `song.path` into a `useRef` Map cache with an
     in-flight guard.
-  - Lyrics: `fetchLyrics` on song change, overlays the art area, auto-scrolls
-    to the active line (`LINE_H = 52`). Only the `grid` layout exposes lyrics.
-  - Pan gesture: horizontal >70px → next/previous, down >90px → `router.back()`.
-- **`playing/queue.tsx`**: now a **route**, not a sheet modal (that's changed
-  from earlier revisions). Splits upcoming tracks into "Continuing from the
-  album" vs "Added by you" using `player.addedSongIds`. Clear → `CLEAR_QUEUE`.
-- **`history/index.tsx`**: `SectionList` grouped by Today/Yesterday/weekday/
-  date from `history.store`, plus a "This year on the Pod" stat block (plays,
-  records added, never-played albums, listening hours) computed from history ×
-  library.
-- **`pod/*`**: settings-style ruled rows. `index` links out to the sub-screens
+  - Lyrics: `fetchLyrics` on song change, cross-fades with the art in the same
+    box, auto-scrolls to the active line (`LINE_H = 52`).
+  - Pan gesture is **horizontal only** (`activeOffsetX` ±14, `failOffsetY`
+    ±18) — the vertical axis must reach the sheet. The art follows at half
+    travel and dims as it goes, then springs back; past ±70px it fires
+    next/previous.
+- **`playing/queue.tsx`**: a **route**, not a sheet modal. Splits upcoming
+  tracks into "Continuing from the album" vs "Added by you" using
+  `player.addedSongIds`. Clear → `CLEAR_QUEUE`.
+- **`components/Onboarding.tsx`**: three panels (records-not-a-stream /
+  phone-is-the-remote / Bluetooth permission), pulsing app mark, dot pager,
+  Continue → Allow Bluetooth, Skip → Not now. Writes `thepod_onboarded` and
+  hands back to the connection gate. The button **does not** request Bluetooth
+  itself — dismissing mounts `PairingScreen`, whose scan is what triggers the
+  iOS prompt.
+- **`pod/*`**: settings-style rows. `index` links out to the sub-screens
   and holds Disconnect + Power Off (`SHUTDOWN`, 5s, then local disconnect +
   clear stores). `battery` polls every 20s. `storage` does the upload flow
   (reachability check → document picker → HTTP upload → refresh storage +
@@ -234,28 +354,93 @@ through to `notificationListeners`.
 
 ### Services & stores
 
+#### Seamless reconnection — how it actually works
+
+The goal is Apple-Watch behaviour: pair once, then it is simply connected
+whenever it's nearby, with no scanning, tapping or waiting. Four pieces make
+that work, and **removing any one silently degrades it back to cold connects**:
+
+1. **`UIBackgroundModes: ['audio', 'bluetooth-central']`** (`app.json`). Without
+   `bluetooth-central` iOS suspends all BLE the moment the app backgrounds.
+2. **Core Bluetooth state preservation/restoration** — `BleManager` is
+   constructed with `restoreStateIdentifier: 'thepod-ble-central'` and a
+   `restoreStateFunction`. iOS then keeps pending connections alive across
+   suspension, queues BLE events, and **relaunches the app in the background**
+   when one arrives. `restoreStateFunction(null)` = cold start; non-null =
+   restored, and `restoredState.connectedPeripherals` are already linked.
+   The identifier is keyed on by iOS, so **never change it** — a new value
+   orphans the preserved state.
+3. **A standing connect with no timeout** (`connectWhenInRange`). CoreBluetooth
+   `connect` never times out on its own; it completes whenever the peripheral
+   appears. That is the whole reconnect strategy — no scan loop, no polling, no
+   backoff, and the radio stays idle while waiting.
+4. **Re-arming on every edge**: an involuntary drop (`setDisconnected`),
+   Bluetooth being toggled back on (`onBluetoothReady`, which fires immediately
+   with the current state and therefore also covers launch), and returning to
+   the foreground (`AppState` → `verifyLink()`, re-arm if the link died while
+   away).
+
+A restored or background-completed connection has **nothing awaiting a
+promise**, which is why `onConnected` / `store.adoptConnection()` exist. A
+restored peripheral is live at the link layer but this process holds none of
+its state, so `adoptRestored` rediscovers services and re-subscribes the
+status notify before treating it as usable.
+
+Known limits, straight from Apple: restoration does **not** happen if the user
+force-quits the app from the app switcher, turns Bluetooth off, or denies the
+Bluetooth permission.
+
 - **`BluetoothService.ts`** (singleton `podService`, no React dependency):
-  - `scan()`: 8s window, `startDeviceScan(null, {allowDuplicates:false})`,
-    sorts so a device named `ThePod` (`POD_DEVICE_NAME`) comes first.
+  - `scan()`: 8s window, **filtered on `[POD_SERVICE_UUID]`** so only Pods are
+    ever delivered — an unfiltered scan surfaced every phone/TV/earbud nearby,
+    which is noise no user of this app can act on. This depends on the firmware
+    putting the 128-bit UUID in the **advertisement** (not the scan response),
+    which is what CoreBluetooth matches on; `_adv_payload()` does. The
+    name-based sort is now just a tiebreak between Pods.
   - `connect(deviceId)`: races `_connectInternal` against a 12s timeout;
     guarded by `_isConnecting` so concurrent calls no-op. Internally:
     `connectToDevice({requestMTU:512, timeout:10000})` →
-    `discoverAllServicesAndCharacteristics()` → **800ms sleep** (empirically
-    needed before the Pi's GATT table is reliably queryable) → subscribes to
-    Status notify → registers `onDisconnected` cleanup (clears device,
-    subscription, pending requests, chunk buffers, fires
-    `disconnectListeners`).
+    `discoverAllServicesAndCharacteristics()` → subscribes to Status notify →
+    registers `onDisconnected` cleanup (clears device, subscription, pending
+    requests, chunk buffers, fires `disconnectListeners`) → **`handshake()`**.
+  - **`handshake()`** — PINGs until the Pod answers (4 tries × 1.4s),
+    re-subscribing the status notify between attempts, and throws if it never
+    does. It replaced a fixed 800ms sleep, and it is not optional politeness:
+    the Pi drops every notification while its `notifying` flag is False
+    (`gatt_server._notify`), so a command answered before iOS's `StartNotify`
+    lands gets a reply that goes nowhere. See the first-connect entry under
+    "Solved". `adoptRestored` runs it too — more important there, since nothing
+    is awaiting a promise to notice a dead link.
   - `disconnect()`: removes subscription, `cancelDeviceConnection`, swallows
     errors.
-  - No retry/backoff logic anywhere in this file — reconnection is driven by
-    the store (`bluetooth.store.autoConnect`) on app launch, not by the
-    service itself.
+  - **`connectWhenInRange(deviceId)`** — the standing reconnect. Calls
+    `connectToDevice` with **no `timeout`**, which is the whole point:
+    CoreBluetooth's connect has no timeout of its own and simply completes
+    whenever the peripheral turns up. So "reconnect when nearby" needs no scan
+    loop, no polling and no backoff — iOS does the waiting and keeps the radio
+    idle, which a repeated scan would not. Don't "fix" this by adding a timer.
+  - **`cancelPendingConnect()`** — a standing reconnect holds the radio on one
+    peripheral, so it must be dropped before a scan or a connect to a
+    *different* Pod can run. Both store actions call it first.
+  - **`handleLinkLost()`** — the single teardown path, idempotent, fired both
+    by `onDisconnected` and by a **status-notify error**. That second trigger
+    matters: the monitor error used to be swallowed, which produced the worst
+    failure mode available — the link looks up, the gate lets you into the app,
+    and then every request times out against an empty library and a blank
+    battery with nothing on screen saying why. If the notify is dead the
+    connection is useless; surface it as a disconnect.
 - **`bluetooth.store.ts`**: `connectionState` is
   `disconnected|scanning|connecting|connected`, all transitions guarded by
   checking current state first (prevents overlapping scan/connect calls —
   this is also the fix for the "auto-disconnect right after scan ended" bug,
   see Solved bugs). Persists the last connected device id in AsyncStorage
-  (`thepod_device_id`) and `autoConnect()` uses it on app launch. On connect,
+  (`thepod_device_id`). **`autoConnect()` runs at launch *and again on every
+  involuntary drop*** — `setDisconnected()` re-arms it — so once you've paired
+  once, walking back into range reconnects on its own with no tapping. It sets
+  `awaitingPod` (not `connectionState`) while iOS holds the connect open, which
+  is what `PairingScreen` renders as "Waiting for ThePod…". The explicit
+  Disconnect/Power-off path forgets the saved id, which is precisely what stops
+  the standing reconnect from latching straight back on. On connect,
   immediately issues `GET_INFO` (5s timeout, swallowed on failure) to learn
   the Pi's current WiFi IP/port for HTTP upload — BLE is control-plane only,
   file transfer goes over `podIp:podPort` (HTTP server in `http_server.py`).
@@ -275,6 +460,42 @@ through to `notificationListeners`.
 - **`library.store.ts`**: one `GET_LIBRARY` request (30s timeout — full
   library can be large/slow to chunk), flat arrays of albums/artists/songs.
   No pagination; whole library comes back in one (possibly chunked) response.
+  **Persisted to `thepod_library` (AsyncStorage) on every successful fetch and
+  re-read at launch** — after album art it's the other expensive payload on the
+  link, so a reconnect or cold start renders from disk and asks the Pod for
+  nothing. Three pieces make that hold: `isLoading` starts **true** so a screen
+  can't fire `GET_LIBRARY` before the disk read lands; `hydrate()` memoizes the
+  *promise* (not a boolean) so a second caller mid-read awaits the same read
+  instead of seeing an empty store; and screens call **`ensureLibrary()`**
+  (disk first, BLE only if the cache came up empty) rather than `fetchLibrary()`
+  directly. `fetchLibrary()` is now the *explicit refresh* — upload, delete,
+  Retry, and pull-to-refresh on the Library lists. `clear()` is **memory-only**
+  (the cached copy surviving a disconnect/power-off is the whole point) and
+  immediately re-hydrates; `app.store.reset()` removes the key by prefix sweep
+  before calling it, so the re-read correctly finds nothing. Nothing expires the
+  cache on its own — music put on the Pod outside the app shows up on a refresh.
+- **`art.store.ts`**: album art is the most expensive thing on the BLE link —
+  hundreds of chunked notifies per record — so a fetched cover is **written to
+  `Paths.cache/album-art/` and reused forever**. A reconnect or a cold launch
+  paints from disk and never asks the Pod again. Art for a given file never
+  changes, so there is no invalidation problem; the OS may reclaim the
+  directory under storage pressure and a miss just re-fetches.
+  - Filenames are a **64-bit FNV-1a as two independently-seeded 32-bit passes**.
+    Track paths are too long (and contain `/`) to use directly, and a single
+    32-bit hash would collide about 1-in-300 across a few thousand tracks —
+    which shows the *wrong cover*, silently. Don't reduce it to one pass.
+  - `hydrate()` reads the directory listing **once** into an in-memory `Set` so
+    the `useArt` selector can stay synchronous — it has to answer during render,
+    and touching the filesystem there would cost a frame of missing artwork.
+    Called from `_layout.tsx` before anything renders.
+  - `clear()` drops memory only (the disk cache surviving is the entire point);
+    `purgeDisk()` is the full wipe and is only used by Reset.
+- **`app.store.ts`**: holds `onboarded` and the global `reset()`. The flag lives
+  in a store rather than `_layout` local state specifically so Pod › About's
+  "Reset app" can flip it and drop the whole tab stack back to the intro.
+  `reset()` cancels any pending reconnect, disconnects, sweeps every
+  `thepod_*` AsyncStorage key, purges the art directory and clears every store.
+  Nothing on the Pod is touched — it is a local wipe, not an un-provisioning.
 - **`history.store.ts`**: local-only play log in AsyncStorage
   (`thepod_play_history`, newest-first, capped at `MAX_ENTRIES = 500`).
   Firmware/MPD have no concept of plays, so a "play" is simply the app
@@ -312,41 +533,106 @@ through to `notificationListeners`.
   other device disconnects current (if any) then connects to the new one.
   (First-run/disconnected pairing goes through `PairingScreen`, not this.)
 
-### Visual language (rewritten — "Modernist")
+### Visual language (v2 — "feed-led, full-bleed, orange")
 
-`src/constants/theme.ts` was fully replaced. The old Spotify-green/rounded/
-glass look is **gone**; don't reintroduce radii or surface fills.
+`src/constants/theme.ts` is a direct port of the `ThePod App v2` design.
+Rounded surfaces and elevation steps are **back** (the flat/zero-radius
+Modernist pass is gone). Four moves define it, and they're worth keeping
+straight because most layout questions answer themselves from them:
 
-- `Palette`: `bg #0A0A0A`, `divider #2d2b2b`, `border #444141`,
-  `borderFaint #605d5d`, `text #f8f4f4`, `textSecondary #9b9797`,
-  `textMuted #605d5d`, `accent #ec3013` (red-orange, the only accent),
-  `accentText #ffffff`, plus `danger`/`warning`. The old
-  `surface`/`surfaceHigh` keys no longer exist.
-- `Radius`: every value is **0**. Kept as a knob only so stray `Radius.*` call
-  sites stay flat; nothing currently uses it.
-- `Font`: Archivo — `regular` 400 / `medium` 600 / `bold` 700 /
-  `heading` 800. Idiom throughout: huge 40px `heading` page titles, and 9–11px
-  `bold` uppercase letter-spaced labels for everything secondary.
-- Structure is drawn with **rules, not cards**: `ui/Card.tsx` is a 2px top
-  rule with no background; `ui/Row`, `ui/NavRow`, `ui/SectionHeader` follow.
-- Icons are inline SVG in `ui/icons.tsx` (`IconName` union, ~24 icons incl.
-  the four tab glyphs) — no icon font, no emoji.
-- `ui/AlbumArt.tsx` is the single art component: a stable hashed
-  `{bg, fg}` colour block from `utils/albumColor.ts` with the title's initial,
-  and the real `expo-image` art (200ms transition) layered on top once loaded.
-  So there is never an empty grey square, and art can arrive late.
+1. **Feed, not a list** — Home opens on horizontal shelves, not a table.
+2. **Colour wash** — album/playlist/player headers bleed a hue sampled from
+   the record into the canvas.
+3. **One accent gesture per surface** — a single circular orange play control.
+   Everything else stays monochrome. Resist adding a second orange thing.
+4. **Four tabs** — Home · Search · Library · Pod.
+
+- `Palette`: `bg #0A0A0A`, `surface #141416`, `rail #1F1F22`,
+  `control #2A2A2E`, `inactive #3a3a3e`; `text #ffffff`,
+  `textSecondary #a1a1a6`, `textMuted #6b6b70`; `accent #EE3211`,
+  `accentHi #FF6B4A`, `accentWash #2A100C` (behind hi-res badges);
+  `success/warning/danger` + `dangerWash #2C0A0A`. `divider`/`border`/
+  `borderFaint` are kept as **aliases onto the elevation steps** purely so the
+  older rule-based screens keep compiling — don't reach for them in new code.
+- `Radius`: `xs 5 · sm 7 · md 10 · lg 12 · card 16 · pill 999`. Real values
+  now; the "every radius is 0" rule is dead.
+- `Font`: **Spline Sans** — `regular` 400 / `medium` 500 / `bold` 600 /
+  `heading` 700, plus `mono` (Menlo on iOS) for **every numeric or format
+  readout**: durations, RSSI, MTU, `24/192`, MAC addresses. That mono/sans
+  split is load-bearing in this design, not decoration.
+- `src/components/ui/controls.tsx` is the v2 kit: `Chip`/`ChipRow`, `Fab`,
+  `IconCircle`, `HeaderWash`, `SectionTitle`, `Overline`, `SpecBadge`,
+  `PillButton`, `Pulse`, `PlayingBars`. Reach here before writing a new
+  primitive. The older `ui/Card`, `Row`, `NavRow`, `SectionHeader`, `Sheet`
+  survive and are still used by the `pod/*` settings screens.
+- `Pulse` (expanding, fading ring) is shared by `PairingScreen`, `pod/index`
+  and `Onboarding` — it is absolutely positioned, so pass it the **same
+  size/radius as its parent** or it will not sit concentric.
+- `utils/albumColor.ts` is the wash engine: `hueFor(key)` hashes an id/title to
+  a stable hue, then `ringColor` / `tintColor` / `washColor` derive the
+  saturated line, the dark gradient stop and the header wash. One number drives
+  the art block, the header gradient and the accent ring, so **no artwork is
+  ever required** — real art just layers on top when it arrives. Checked by
+  `src/utils/albumColor.test.ts` (`node src/utils/albumColor.test.ts`; excluded
+  from the tsc program in `tsconfig.json`).
+- Icons are inline SVG in `ui/icons.tsx` (`IconName` union) — no icon font,
+  no emoji.
+- `ui/AlbumArt.tsx` holds the cover at **zero opacity until `onLoad` fires**,
+  then fades it in over 260ms. expo-image's own `transition` prop is
+  deliberately unused: it starts as soon as the first bytes decode, which shows
+  exactly the half-painted band this is meant to prevent. The reveal resets on
+  every `uri` change so a recycled row can't flash the previous cover. It
+  layers the real `expo-image` art over the hue block, so
+  there is never an empty grey square and art can arrive late.
 - AsyncStorage keys in use: `thepod_device_id`, `thepod_play_history`,
-  `thepod_recent_searches`, `thepod_now_playing_style`.
+  `thepod_recent_searches`, `thepod_onboarded`. **All app keys are namespaced
+  `thepod_` on purpose** — `app.store.reset()` enumerates `getAllKeys()` and
+  removes by prefix rather than hardcoding a list, so a screen that adds a key
+  later can't silently survive a reset. Keep the prefix.
+- **Motion**: `ui/controls.tsx` exports `Pressed`, the single source of tap
+  feedback — a `Pressable` that dips in scale/opacity on press-in and *springs*
+  back on release (spring, not timing, so it overshoots slightly and reads as a
+  physical button). `Chip`, `Fab`, `IconCircle` and `PillButton` all route
+  through it, and rows/cards use it directly; `scaleTo` is tuned per element
+  size because a 3% dip that feels right on a row makes a 142px shelf card
+  lurch. The dip is shallow (0.14 opacity) and gated behind
+  `unstable_pressDelay={55}`, so touching a row on the way into a scroll never
+  lights it up. **Tab switches are an instant swap** — the acknowledgement is
+  the springing tab glyph. There *was* a cross-fade, via an `Animated.View`
+  keyed on the active tab around `TabSlot`; the key change unmounted the whole
+  tab stack on every switch, so lists and scroll position were rebuilt and
+  mount effects re-ran while the fade played over a blocked JS thread. Don't
+  reintroduce it — a keyed wrapper around `TabSlot` is a remount, not a
+  transition. Stacks use `animation: 'slide_from_right'`. Now Playing has **no**
+  screen animation of its own — it is a native modal sheet, and the rise and the
+  interactive drag-to-dismiss are the presentation, not a transition inside it.
+- **State changes get a transition, not a swap.** `Fab` stacks the play and
+  pause glyphs and cross-fades + scales between them rather than swapping
+  `name`; the art/lyrics toggle is a `FadeIn`/`FadeOut` pair in one box;
+  `MiniPlayer` enters on `SlideInDown` and leaves on `SlideOutDown`, because it
+  changes the height of everything above it and must never pop.
+- **Animation cost rules**, learned the hard way and cheap to keep:
+  - Animate `transform`/`opacity`, **never a layout property**. `PlayingBars`
+    scales a fixed-height bar (`transformOrigin: 'bottom'`) instead of animating
+    `height`; every progress fill in the app — `Scrubber`, `MiniPlayer` — is a
+    full-width view with `transformOrigin: 'left'` driven by `scaleX`, **not** a
+    percentage `width`, which re-runs layout on every frame.
+  - **A drag must never `setState`.** `Scrubber` writes a caller-owned shared
+    value and `LiveText` renders the number by writing the `text` prop of a
+    read-only `TextInput` through `useAnimatedProps` — so a scrub never enters
+    React at all. This replaced responder-based bars that re-rendered Now
+    Playing's gradient, artwork and lyric sheet on every touch-move.
+  - `AlbumArt` and the lyric sheet are `memo`'d — all-primitive props, and
+    `AlbumArt` owns a gradient plus a decoded image in every list row.
 
 ### Known dead code (safe to delete, nothing imports it)
 
 `src/features/bluetooth/BluetoothProvider.tsx` (+ `useBluetooth`),
-`src/components/ui/EmptyState.tsx`, `Radius` in `theme.ts`, the
-`import '@/global.css'` at the top of `theme.ts` (leftover from NativeWind —
-`src/global.css` only defines CSS vars nothing reads), `Genre`/`Playlist` in
-`types/music.ts`, `player.setPosition`, `LockScreenService.teardownLockScreen`.
+`src/components/ui/EmptyState.tsx`, `Genre`/`Playlist` in `types/music.ts`,
+`player.setPosition`, `LockScreenService.teardownLockScreen`.
 `playPlaylist`/`PLAY_PLAYLIST` is wired end-to-end but has **no UI caller** —
-there's no playlist screen yet.
+see the playlist note under Roadmap. (`Radius` is no longer dead — the v2
+design uses every value. The `@/global.css` import is gone.)
 
 ## Firmware-side implementation notes
 
@@ -369,9 +655,14 @@ there's no playlist screen yet.
   `threading.Thread` and marshal replies back via `GLib.idle_add`).
   `AutoPairAgent` registers as `NoInputNoOutput` with `RequestDefaultAgent` —
   this is why the app connects without a pairing prompt. Advertising is
-  registered via `LEAdvertisingManager1.RegisterAdvertisement` (D-Bus), not
+  attempted via `LEAdvertisingManager1.RegisterAdvertisement` (D-Bus), not
   `btmgmt` — this was a past bug fix, see Solved bugs, don't revert to
-  subprocess/btmgmt. A `PropertiesChanged` signal receiver watches for BLE
+  subprocess/btmgmt. **That D-Bus call currently always fails on this box**
+  (BlueZ 5.82 ext-adv bug, see Solved), so `_advertise_via_mgmt` takes over via
+  the legacy `Add Advertising (0x003e)` MGMT opcode on a raw socket that
+  `_mgmt_sock` must keep open for the process lifetime. `_set_discoverable`
+  runs **after** the agent registration on purpose — bluetoothd re-enables
+  `Pairable` when a default agent is installed. A `PropertiesChanged` signal receiver watches for BLE
   disconnect and calls `mpd.pause_if_playing()` — playback auto-pauses when
   the phone disconnects.
 - **`command_handler.py`**: `handle(raw)` parses JSON, looks up `cmd` in a
@@ -434,9 +725,11 @@ there's no playlist screen yet.
 
 ## Current working state
 
-Verified by reading the code on **2026-08-05**; **not** re-verified on
-hardware that day (the Pi was unreachable). Anything below marked ✳ is new
-and uncommitted on branch `fresh`.
+Verified on **2026-08-08** by reading the code, `tsc --noEmit` (clean) and a
+full `expo export --platform ios` (bundles clean). The v2 redesign has **not
+been run on hardware or on a simulator** — treat every ✳ item as "compiles and
+reads right", not "seen working". Anything marked ✳ is new and uncommitted on
+branch `fresh`.
 
 - MPD playback through PCM5122 (via `equal` ALSA device — alsaequal EQ live)
 - BlueZ GATT server runs as `thepod.service` (systemd), auto-advertises via
@@ -449,40 +742,106 @@ and uncommitted on branch `fresh`.
 - EQ presets (Flat/Bass/Vocal/Treble) working via `amixer`
 - WiFi network management from the Pod tab (commit `59fecb7`)
 - Playlist playback command exists (commit `a437a6a`) but has no UI entry point
-- ✳ Full visual redesign to the "Modernist" language (Archivo, flat, red-orange
-  accent, rule-based layout) — `Design.pdf` / `Design2.pdf` are the source
-- ✳ Four tabs (Library / Playing / History / Pod), custom `expo-router/ui` tab
-  bar, MiniPlayer, and a `PairingScreen` gate replacing the old single-screen
-  entry
-- ✳ Library search screen (client-side, recent searches) and album detail route
+- ✳ Full visual redesign to the **v2 "feed-led" language** (Spline Sans,
+  rounded, colour wash, `#EE3211`) — source is the Claude Design project
+  *Mobile app design system*, file `ThePod App v2.dc.html`. This **replaced**
+  the short-lived "Modernist" pass; `Design.pdf`/`Design2.pdf` are that older,
+  superseded direction
+- ✳ **Three** tabs (Home / Library / Pod), custom `expo-router/ui` tab bar,
+  MiniPlayer, and an Onboarding → PairingScreen → AppTabs gate
+- ✳ Home feed with quick picks and four horizontal shelves; History moved under
+  Home
+- ✳ Search **merged into Library** as an inline filter; `src/app/search/`
+  deleted. Library tabs are Songs (default) / Albums / Artists
+- ✳ `art.store.ts` — album-art cache backed by `Paths.cache/album-art/`, so
+  covers survive reconnects and cold launches; in-flight guard plus a
+  sequential background prefetch (art requests must not flood BLE)
+- ✳ `library.store.ts` persists the library to `thepod_library`, so a connect no
+  longer re-sends the whole chunked library over BLE; pull-to-refresh on the
+  Library lists is the manual refresh
+- ✳ `app.store.ts` + **Reset app** (Pod › About) — wipes every `thepod_*` key,
+  the art directory and all stores, then returns to onboarding
+- ✳ Motion pass: `Pressed` spring feedback on every control, springing tab
+  glyphs, stack slide animations, art fade-in on load — plus a smoothness pass
+  that killed the tab-switch remount, moved `PlayingBars` off layout animation,
+  took the volume drag and the lyric sheet out of the screen's render path, and
+  memoised `AlbumArt`
+- ✳ PING/PONG handshake gating "connected", which fixes the first connect
+  after pairing coming up with no data
+- ✳ Seamless BLE reconnection — `bluetooth-central` background mode, Core
+  Bluetooth state restoration, a no-timeout standing connect, and re-arming on
+  drop / Bluetooth-on / foreground. See "Seamless reconnection" above
+- ✳ `ui/controls.tsx` — the shared v2 primitive kit
+- ✳ Three-panel first-run Onboarding (`thepod_onboarded`)
 - ✳ Queue promoted from sheet to `/playing/queue`, with `CLEAR_QUEUE` /
   `ADD_TO_QUEUE` on both sides and "Added by you" provenance
-- ✳ History tab + local play log with year stats
-- ✳ Now Playing has three switchable layouts (grid / poster / console)
+- ✳ Now Playing reduced to a single layout (the 3-style switcher is gone)
 - ✳ `dateAdded` plumbed from MPD `last-modified` → "Recent" album sort
+- ✳ App icon is the white-P-on-`#EE3211` mark; splash ground `#0A0A0A`.
+  Android's adaptive-icon **foreground is still the Expo default artwork** —
+  only its background colour was brought onto brand. iOS is the only built
+  platform, so this was left alone deliberately
 - ✳ `ErrorBoundary` (both the in-tree one and Expo Router's, exported from
   `_layout.tsx`) + font-load timeout so release builds can't silently blank
 - ✳ `plugins/withPodDeploymentTarget.js` to make the iOS Pods build
 - **Removed**: the Spotify Connect card is no longer in the app (raspotify may
   still be installed on the Pi; nothing in the app talks to it)
 
-**Networking**: Pi joins home WiFi (`Airtel_Saini Wifi Base_EXT`, autoconnect,
-priority 100). The old `ThePod-AP` hotspot is disabled. Pi's home-WiFi IP is
-DHCP-assigned (`192.168.1.28` on 2026-08-05 — get the current IP via BLE
-`GET_INFO`, don't assume it's static). The Pi also answers mDNS as
+**Networking**: The Pi joins home WiFi on boot (autoconnect, priority 100); the
+old `ThePod-AP` hotspot is disabled. The network was `Airtel_Saini Wifi Base_EXT`
+as of 2026-08-05 and is **`AlchemyZden` as of 2026-08-09**. Pi's IP is
+DHCP-assigned (`192.168.1.28`, unchanged across both dates — but get the current
+IP via BLE `GET_INFO`, don't assume it's static). The Pi also answers mDNS as
 **`ThePod.local`**, which is the reliable way to reach it without chasing DHCP.
 File uploads go over home WiFi once the app has the IP (via `http_server.py` on
 port 8080); control still goes over BLE. Note `pod/storage.tsx` still shows a
 "connect to ThePod Wi-Fi / password thepodmusic" alert on unreachable, which
 refers to the retired hotspot — stale copy.
 
+**The app can move the Pi to a different WiFi network, over BLE — no SSH
+needed.** Pod › Network (`src/app/pod/network.tsx`) scans (`SCAN_WIFI`) and
+joins (`CONNECT_WIFI{ssid,password}`), which `command_handler.py` executes via
+`nmcli` on a background thread. This is the **recovery path when the Pi is
+unreachable over IP**: BLE is a completely separate transport, so it keeps
+working when SSH/HTTP can't get through, and it's how you get the Pi onto the
+same access point as your Mac before deploying. Two constraints that make this
+matter more than it looks: the **Pi Zero 2 W radio is 2.4 GHz-only**, so it can
+never join a 5 GHz-only AP no matter what the app sends; and being on the same
+*subnet* is not enough — see the AP-isolation entry below.
+
 **SSH**: `sshpass -p '13root' ssh alcehmy@ThePod.local`
 
-⚠️ **macOS Local Network permission gotcha.** If SSH/ping to the Pi returns
-`No route to host` while the internet and the router (`192.168.1.1`) work fine,
-it is not the network — it's macOS blocking LAN peer access for the calling app.
-Grant it under System Settings → Privacy & Security → **Local Network**. This
-cost a whole session; it looks exactly like AP client isolation.
+⚠️ **`No route to host` to the Pi — two different causes, and they look
+identical.** Both give instant `EHOSTUNREACH` on SSH/ping to the Pi while the
+internet and the router (`192.168.1.1`) work fine. **Run the discriminator
+before touching anything** — guessing wrong has now cost two sessions, one in
+each direction:
+
+```bash
+netstat -rn -f inet | grep 192.168.1     # look for `!` (reject route) on the Pi's IP
+dns-sd -t 4 -G v4 ThePod.local           # live mDNS, NOT the dscacheutil cache
+```
+
+- **mDNS answers but the route is `!`** → the Pi is alive and its *multicast*
+  reaches you, while unicast/ARP does not. That is an **access-point boundary**
+  (client isolation, or a separate AP/band bridging only multicast). Being on
+  the same subnet and gateway does **not** rule this out — check the actual
+  SSID and band on both ends, remembering the Pi is 2.4 GHz-only:
+  `system_profiler SPAirPortDataType | grep -A6 "Current Network Information:"`.
+  Fix by putting both ends on the same AP — and note you can move *the Pi* from
+  the app over BLE (see Networking above) when you can't reach it over IP.
+- **No mDNS answer at all, or a mDNS answer with a normal live route** → then
+  suspect **macOS Local Network privacy** blocking LAN peer access for the
+  calling app. Grant it under System Settings → Privacy & Security → **Local
+  Network**. The app to enable is whichever one owns the terminal — for the
+  VS Code integrated terminal that's **Visual Studio Code**, not Terminal.app;
+  restart it afterwards. **If the app isn't listed at all, this is not your
+  problem** — the OS only lists apps it has actually attributed an attempt to,
+  so an absent entry means nothing was ever denied.
+
+Also note the Claude Code **sandbox** independently returns `No route to host`
+for LAN peers, which masks both causes above. Re-run with the sandbox disabled
+before believing any of this diagnosis.
 
 ## Deploy
 
@@ -504,10 +863,27 @@ Optionally clear `firmware/__pycache__` on the Pi after deploy.
 sshpass -p '13root' ssh alcehmy@ThePod.local "sudo journalctl -u thepod -n 8 --no-pager"
 ```
 
-You want `[ADV] Advertisement registered`. If you see
-`[ADV] Advertisement error: org.bluez.Error.Failed`, the Pod is **invisible to
-the app** even though `systemctl is-active` says `active` — see the advertising
-entry under "Solved".
+On this box the expected line is **`[ADV] Advertisement registered (legacy MGMT
+fallback)`**, preceded by `[ADV] D-Bus advertisement failed`. That pair is the
+healthy state, not an error — see the BlueZ ext-adv entry under "Solved".
+`[ADV] Advertisement registered` (no suffix) means BlueZ's D-Bus path started
+working again, which is also fine. The one line that means trouble is
+`[ADV] Legacy MGMT advertising ALSO failed`: then the Pod is **invisible to the
+app** even though `systemctl is-active` says `active`.
+
+Quick end-to-end check that the radio is actually advertising:
+
+```bash
+sshpass -p '13root' ssh alcehmy@ThePod.local "sudo btmgmt info | grep 'current settings'"
+```
+
+`advertising` must appear in the list; `bondable` must **not** (that is
+`Pairable=False` having taken effect).
+
+**Deployed 2026-08-10**: `gatt_server.py` — BR/EDR `Discoverable`/`Pairable`
+off, plus the legacy-MGMT advertising fallback. Verified on hardware across a
+cold reboot: `Discoverable=false`, `Pairable=false`, `advertising` set, and the
+fallback registering unattended at boot.
 
 **Deployed 2026-08-05**: `command_handler.py`, `mpd_controller.py`,
 `library_manager.py` (`CLEAR_QUEUE`, `ADD_TO_QUEUE`, `dateAdded`) and the
@@ -515,6 +891,62 @@ entry under "Solved".
 `grep -c 'CLEAR_QUEUE\|ADD_TO_QUEUE'` → 5 and `grep -c last-modified` → 1.
 
 ## Solved — do not re-investigate
+
+- **App launched on Pod › settings, and closing Now Playing landed there too**
+  → one root cause, and it is not in this repo's logic. `expo-router/ui`'s
+  `Tabs` does **not** use `TabList` order: `triggersToScreens` re-sorts the
+  routes through `sortRoutesWithInitial`, whose tiebreak is
+  `a.route.length - b.route.length` (`sortRoutes.ts:56`). With tabs
+  `home`/`library`/`pod` that makes **`pod` route 0** — which is both the
+  navigator's initial route and, under the default `backBehavior: 'firstRoute'`,
+  the target of every `goBack()`. Fixed by declaring
+  `unstable_settings = { anchor: 'home' }` in `src/app/(tabs)/_layout.tsx` (it
+  must be in the *route file*; `Tabs.js` reads `routeNode.initialRouteName` and
+  applies it **after** spreading your `options`, so passing `initialRouteName`
+  as a prop is silently ignored) and `backBehavior: 'history'` on `<Tabs>`.
+  **Adding a tab whose route name is shorter than `home` re-breaks this** unless
+  the anchor is kept.
+- **Swiping down on Now Playing cut instantly instead of animating away** →
+  Now Playing was a *tab*, so `router.back()` was a tab-index change: there is
+  no transition to play, and the `slide_from_bottom` on its Stack never ran
+  because that stack's index screen is never pushed. Fixed structurally — the
+  tabs moved into a `(tabs)` group and `playing` became a
+  `presentation: 'modal'` screen on a root `<Stack>`. The rise, the rubber-band
+  and the finger-tracking dismiss are all the native sheet's. Don't try to
+  re-solve this with a JS-driven translate on a tab; the gesture has to be on
+  the UI thread and interruptible, which a tab swap can't be.
+
+- **iOS showed its "ThePod would like to pair" dialog on every connect** →
+  nothing in the GATT service needs an encrypted link (every characteristic is
+  plain `read`/`write`/`notify`, no `encrypt-*`/`secure-*` flags), so the
+  pairing was pure overhead. The source was `gatt_server._set_discoverable`
+  leaving the adapter **BR/EDR `Discoverable` + `Pairable`** — a separate path
+  from LE advertising, which is the only thing CoreBluetooth sees. Both are now
+  `False`; LE advertising via `RegisterAdvertisement` is untouched, and an
+  unbonded BLE peripheral still auto-reconnects by identifier. Don't re-enable
+  them to "make pairing work" — pairing is what you're trying to avoid.
+- **First connect after pairing fetched nothing until you reconnected** → the
+  Pi's `_notify` silently drops every notification while `notifying` is False,
+  so any command answered before iOS's `StartNotify` reaches BlueZ gets a reply
+  that goes into the void. A first-ever connect has no cached GATT database and
+  is still negotiating MTU, so the subscription lands late — and the only guard
+  was a fixed 800ms sleep, which is a guess, not a check. `connect` now ends in
+  a PING/PONG `handshake()` that re-subscribes between attempts and fails the
+  connect if the Pod never answers. App-side fix, no firmware deploy needed.
+  Don't "simplify" it back to a sleep.
+- **App connected but library and battery stayed empty, with no error** → the
+  status-notify subscription had failed and `subscribeToStatus` swallowed the
+  error, so the link looked up while every request timed out. Now routed to
+  `handleLinkLost()`. A dead notify is a dead connection.
+- **~350px hole between the Library chips and the list** → `ChipRow` is a
+  *horizontal* `ScrollView`, which still stretches on the cross axis, so inside
+  a column parent it claimed all remaining height. Fixed with
+  `flexGrow: 0, flexShrink: 0`. Any horizontal ScrollView added to a column
+  layout needs the same.
+- **Back button in Pod sub-screens read "index"** → `pod/index` has
+  `headerShown: false` and therefore no title, so native-stack fell back to the
+  route name. Fixed with `headerBackButtonDisplayMode: 'minimal'` (chevron
+  only) in `pod/_layout.tsx`.
 
 - `btmgmt advertising` hang → replaced with D-Bus
   `LEAdvertisingManager1.RegisterAdvertisement()` (`gatt_server.py:start_server`)
@@ -546,7 +978,71 @@ entry under "Solved".
   the payload was 32 bytes against the 31-byte legacy limit (flags 3 + 128-bit
   ServiceUUIDs 18 + LocalName 8 + tx-power 3). Dropped `Includes: ['tx-power']`
   → 29 bytes. Keep any new advertisement field inside that budget; this
-  controller has no extended advertising.
+  controller has no extended advertising. **This was a real fix but it is no
+  longer the reason the D-Bus path fails — see the next entry before you go
+  budget-hunting again.**
+- **`[ADV] Advertisement error: Failed to register advertisement` on every
+  start, for any payload** → not a payload problem at all: it reproduces with a
+  completely **empty** advertisement, so don't re-litigate the 31-byte budget.
+  BlueZ 5.82 picks the extended-advertising MGMT path and sends
+  `Add Extended Advertising Data (0x0055)` with a parameter block **8 bytes
+  longer than the lengths it declares** — it writes the 11-byte
+  `mgmt_cp_add_advertising` header where kernel 6.18 parses the 3-byte
+  `mgmt_cp_add_ext_adv_data` one. The kernel enforces
+  `data_len == 3 + adv_data_len + scan_rsp_len` and rejects with
+  `Invalid Parameters (0x0d)`. Measured: plen 11 vs 3 (empty), plen 37 vs 29
+  (real payload). There is no fixed BlueZ to upgrade to — 5.82 is newest in
+  both Debian trixie and archive.raspberrypi.com.
+  Fixed in `gatt_server.py` by falling back to the **legacy** `Add Advertising
+  (0x003e)` MGMT opcode, which this controller accepts (BCM43430B0 is HCI 4.2
+  and has no extended advertising, so nothing is lost). Three traps:
+  * The advertising instance is **owned by the MGMT socket** that created it.
+    `_mgmt_sock` is held for the process lifetime; closing or GC'ing it stops
+    the advertisement. This is also why `btmgmt add-adv` is useless here — the
+    instance dies with that process (and `btmgmt add-adv --help` *hangs*).
+  * CPython 3.13's `AF_BLUETOOTH` binder accepts only a 1-tuple and hardcodes
+    `HCI_CHANNEL_RAW`, so `socket.bind()` cannot reach `HCI_CHANNEL_CONTROL`.
+    We bind through `libc` with a packed `sockaddr_hci`.
+  * The kernel skips `LE Set Advertising Data` when its cached copy already
+    matches, and `hdev->adv_data` survives a power cycle. So a *missing*
+    `LE Set Advertising Data` in `btmon` is proof the controller already holds
+    your bytes, not proof it was never set. Diagnose with
+    `btmon -w` + `pkill -INT btmon` (SIGTERM truncates the buffered tail).
+  The D-Bus `RegisterAdvertisement` call is still tried **first**, so a future
+  fixed BlueZ is picked up automatically and the fallback simply stops firing.
+- **Pod visible in the app at full signal, but every connect times out after
+  ~10s with ZERO HCI events on the Pi** → the adapter was not *connectable*, so
+  the kernel was advertising **`ADV_SCAN_IND`** (scannable, non-connectable)
+  instead of `ADV_IND`, and using a **random** address instead of the public
+  one. iOS happily discovers a scannable advertisement and reads its name — the
+  device looks completely healthy in the picker, right RSSI and all — but
+  `connect()` never emits a CONNECT_IND, so nothing whatsoever reaches the Pi.
+  That "no evidence at all" signature is the tell; a real connection attempt
+  always produces an `LE Connection Complete`, even a failing one.
+  Cause: `connectable` is a **separate MGMT setting** from advertising, and
+  bluetoothd only holds it on while it believes something needs it — a
+  *registered* D-Bus advertisement or a discoverable adapter. Ours is
+  registered behind bluetoothd's back over raw MGMT and `_set_discoverable`
+  turns `Discoverable`/`Pairable` off, so bluetoothd concluded nothing needed
+  connections and issued `Set Connectable(off)`. Before the pairing change,
+  `Discoverable=True` had been holding it on by accident.
+  Fixed by `_advertise_via_mgmt` sending `Set Connectable (0x0007)` itself,
+  before adding the instance. **Don't rely on `Discoverable=True` to imply
+  connectable**, and note that setting it by hand (`btmgmt connectable on`)
+  looks like a fix but is wiped by the next `systemctl restart thepod`.
+  Check with `btmgmt info | grep 'current settings'` — `connectable` must be
+  listed — and confirm the type with
+  `btmon` → `LE Set Advertising Parameters` → must read `ADV_IND (0x00)`.
+- **`Pairable` read back `True` even though `_set_discoverable` set it False**
+  → ordering. bluetoothd turns Pairable back on when a default agent is
+  installed, so `_set_discoverable` must run **after**
+  `RequestDefaultAgent`, not before. It now does. Verified by
+  `busctl get-property … Adapter1 Pairable` → `b false`, and by `bondable`
+  disappearing from `btmgmt info` current settings.
+- **`sudo btmgmt advertising on` in `setup_eq.sh`** → deleted. It had nothing to
+  do with EQ, it hangs on this box, and it enables the legacy `Set Advertising`
+  toggle which is mutually exclusive with the per-instance advertising the
+  firmware now depends on.
 - **Pairing screen stuck on "0 found" while BLE genuinely worked** → two bugs
   stacked. (1) `PairingScreen`'s scan effect re-ran on every transition to
   `'disconnected'`, but `startScan()` *ends* by setting `'disconnected'` and
@@ -563,10 +1059,11 @@ entry under "Solved".
 
 - Strict TypeScript, no placeholder/mock/fake implementations
 - Every shipped feature must work end-to-end on real hardware
-- No Android-looking components. **The design language is now flat modernist**
-  (zero radius, rules instead of cards, Archivo, single red-orange accent) —
-  the PRD's earlier "dark, glass, rounded" wording is superseded by
-  `Design.pdf`/`Design2.pdf` and `src/constants/theme.ts`.
+- No Android-looking components. **The design language is the v2 feed-led
+  one** — Spline Sans, rounded surfaces, colour wash, a single `#EE3211`
+  accent used once per surface. This supersedes both the PRD's original
+  "dark, glass, rounded" wording *and* the later flat-Modernist pass. The
+  authority is `src/constants/theme.ts` + `ThePod App v2.dc.html`.
 
 ## Roadmap (original order, check git log for what's actually done)
 
@@ -574,5 +1071,13 @@ BLE Write → BLE Notifications → MPD integration → FLAC playback → Music
 library → Album art → Battery & storage → Firmware updates → (past original
 scope) WiFi management, playlists, EQ, search, history, queue editing.
 
-Not built yet: playlist UI (the command exists), queue reordering (the
-drag-handle icon in `playing/queue.tsx` is decorative), firmware OTA updates.
+Not built yet: queue reordering (the drag-handle icon in `playing/queue.tsx` is
+decorative), firmware OTA updates.
+
+**Playlist UI — the one v2 screen with no implementation.** The design has a
+full playlist screen and Home shelf, and `PLAY_PLAYLIST` already works
+end-to-end. What's missing is the read side: there is **no firmware command to
+list stored playlists**, so the app has nothing to render. Building it means
+adding a `GET_PLAYLISTS` command (MPD `listplaylists` / `listplaylistinfo`) to
+`command_handler.py` + `protocol.ts` first. Don't stub it app-side with fake
+playlists — that violates the no-placeholder rule at the top of this section.

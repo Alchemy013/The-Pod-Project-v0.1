@@ -18,15 +18,41 @@ interface ChunkBuffer {
   total: number;
 }
 
+// Opting into Core Bluetooth state preservation/restoration. With this set,
+// iOS keeps pending connections alive while the app is suspended, queues BLE
+// events, and *relaunches the app in the background* when one arrives — which
+// is the mechanism behind an Apple-Watch-style "it's just connected" feel.
+// Paired with `bluetooth-central` in UIBackgroundModes (app.json); both are
+// required, neither works alone. The identifier must stay stable across
+// releases — iOS keys the preserved state on it, so changing it orphans the
+// restoration and silently reverts to cold connects.
+const RESTORE_ID = 'thepod-ble-central';
+
+// Post-connect readiness probe. A live link answers a PING in well under 100ms,
+// so these only cost anything on the connect that would otherwise have been
+// silently deaf. Worst case 4×1.4s, comfortably inside connect()'s 12s race.
+const HANDSHAKE_TRIES = 4;
+const HANDSHAKE_TIMEOUT = 1400;
+
 class ThePodBluetoothService {
-  private manager = new BleManager();
+  private manager = new BleManager({
+    restoreStateIdentifier: RESTORE_ID,
+    restoreStateFunction: (restored) => {
+      // Runs at construction. `null` means a normal cold start; a value means
+      // iOS handed the app back its live peripherals after terminating it.
+      const peripherals = restored?.connectedPeripherals ?? [];
+      if (peripherals.length) this.adoptRestored(peripherals[0]);
+    },
+  });
   private device: Device | null = null;
   private statusSubscription: Subscription | null = null;
   private pendingRequests = new Map<string, (response: PodResponse) => void>();
   private chunkBuffers = new Map<string, ChunkBuffer>();
   private notificationListeners = new Set<NotificationListener>();
   private disconnectListeners = new Set<() => void>();
+  private connectListeners = new Set<() => void>();
   private _isConnecting = false;
+  private _pendingReconnectId: string | null = null;
   private _scanInFlight: Promise<Device[]> | null = null;
 
   // CoreBluetooth allows a single scan per central manager, so a second
@@ -50,7 +76,12 @@ class ThePodBluetoothService {
     return new Promise((resolve) => {
       const found = new Map<string, Device>();
 
-      this.manager.startDeviceScan(null, { allowDuplicates: false }, (error, device) => {
+      // Filtered on the Pod's service UUID rather than scanning everything and
+      // sorting after: an unfiltered scan surfaces every phone, TV and pair of
+      // earbuds in the room, which is noise no user of this app can act on.
+      // The firmware puts the 128-bit UUID in the *advertisement* (not the scan
+      // response), which is what CoreBluetooth matches on — keep it there.
+      this.manager.startDeviceScan([POD_SERVICE_UUID], { allowDuplicates: false }, (error, device) => {
         if (error) {
           console.error('[BLE] Scan error:', error);
           return;
@@ -79,29 +110,101 @@ class ThePodBluetoothService {
       setTimeout(() => reject(new Error('BLE connect timed out')), CONNECT_TIMEOUT)
     );
     try {
-      await Promise.race([this._connectInternal(deviceId), timer]);
+      await Promise.race([this._connectInternal(deviceId, 10000), timer]);
     } finally {
       this._isConnecting = false;
     }
   }
 
-  private async _connectInternal(deviceId: string): Promise<void> {
+  /**
+   * Arm a reconnect that stays pending until the Pod is back in range.
+   *
+   * CoreBluetooth's connect has no timeout of its own — it simply completes
+   * whenever the peripheral turns up — so this needs no scan loop, no polling
+   * and no backoff. iOS does the waiting, wakes the app when the Pod appears,
+   * and keeps the radio idle in the meantime, which a repeated scan would not.
+   *
+   * Deliberately not routed through `connect()`: that one races a 12s timeout
+   * because a human is watching it, which is the opposite of what's wanted here.
+   */
+  async connectWhenInRange(deviceId: string): Promise<void> {
+    if (this.device || this._pendingReconnectId || this._isConnecting) return;
+    this._pendingReconnectId = deviceId;
+    try {
+      await this._connectInternal(deviceId);
+    } finally {
+      this._pendingReconnectId = null;
+    }
+  }
+
+  /**
+   * Drop a pending reconnect so a manual scan or connect can take the radio.
+   * Without this the armed connect above would sit on the peripheral forever
+   * and a user who wants to pair a *different* Pod could never get in.
+   */
+  async cancelPendingConnect(): Promise<void> {
+    const id = this._pendingReconnectId;
+    if (!id) return;
+    this._pendingReconnectId = null;
+    try { await this.manager.cancelDeviceConnection(id); } catch {}
+  }
+
+  get isAwaitingPod(): boolean {
+    return this._pendingReconnectId !== null;
+  }
+
+  /** `connectTimeoutMs` omitted = wait indefinitely (see connectWhenInRange). */
+  private async _connectInternal(deviceId: string, connectTimeoutMs?: number): Promise<void> {
     const connected = await this.manager.connectToDevice(deviceId, {
       requestMTU: 512,
-      timeout: 10000,
+      ...(connectTimeoutMs === undefined ? {} : { timeout: connectTimeoutMs }),
     });
     await connected.discoverAllServicesAndCharacteristics();
-    await new Promise(r => setTimeout(r, 800));
     console.log('[BLE] Negotiated MTU:', connected.mtu);
     this.device = connected;
     this.subscribeToStatus();
-    connected.onDisconnected(() => {
-      this.device = null;
-      this.statusSubscription = null;
-      this.pendingRequests.clear();
-      this.chunkBuffers.clear();
-      for (const listener of this.disconnectListeners) listener();
-    });
+    connected.onDisconnected(() => this.handleLinkLost());
+    await this.handshake();
+  }
+
+  /**
+   * A link is not usable the moment iOS reports "connected". The Pi drops every
+   * notification while its `notifying` flag is False (`gatt_server._notify`), so
+   * a command answered before iOS's StartNotify actually lands gets a reply that
+   * goes nowhere — which is precisely the "first connect fetches nothing until I
+   * reconnect" failure: on a first-ever connect there is no cached GATT database
+   * and the MTU is still being negotiated, so the subscription lands late.
+   *
+   * So prove the round trip rather than sleeping and hoping. Each failed attempt
+   * re-subscribes, because "the notify never took" is the thing being retried.
+   */
+  private async handshake(): Promise<void> {
+    for (let attempt = 0; attempt < HANDSHAKE_TRIES; attempt++) {
+      try {
+        if ((await this.request({ cmd: 'PING' }, HANDSHAKE_TIMEOUT)).type === 'PONG') return;
+      } catch {
+        // No answer yet, or the write itself failed because the GATT table
+        // wasn't queryable — both mean "try again", not "give up".
+      }
+      if (!this.device) throw new Error('ThePod disconnected while connecting');
+      this.subscribeToStatus();
+    }
+    throw new Error('ThePod connected but never answered');
+  }
+
+  /**
+   * Single teardown path for "the link is gone", whether iOS reported the
+   * disconnect or the status notify died under us. Idempotent, because both
+   * can fire for the same drop.
+   */
+  private handleLinkLost(): void {
+    if (!this.device) return;
+    this.device = null;
+    this.statusSubscription?.remove();
+    this.statusSubscription = null;
+    this.pendingRequests.clear();
+    this.chunkBuffers.clear();
+    for (const listener of this.disconnectListeners) listener();
   }
 
   async disconnect(): Promise<void> {
@@ -121,6 +224,14 @@ class ThePodBluetoothService {
       POD_STATUS_UUID,
       (error, characteristic) => {
         if (error) {
+          // Swallowing this is what produces the worst failure mode there is:
+          // the link looks up, the gate lets you into the app, and then every
+          // request times out with nothing on screen to say why (an empty
+          // library and a blank battery). If the status notify is dead the
+          // connection is useless, so surface it as a disconnect and let the
+          // reconnect logic re-arm rather than sitting there deaf.
+          console.error('[BLE] Status monitor failed:', error.message);
+          this.handleLinkLost();
           return;
         }
         if (!characteristic?.value) return;
@@ -225,6 +336,66 @@ class ThePodBluetoothService {
   onDisconnect(listener: () => void): () => void {
     this.disconnectListeners.add(listener);
     return () => this.disconnectListeners.delete(listener);
+  }
+
+  /**
+   * Fires when a link comes up that the app did **not** initiate — an iOS state
+   * restoration, or a standing reconnect completing while backgrounded. The
+   * store needs this because in those cases nothing is awaiting a promise.
+   */
+  onConnected(listener: () => void): () => void {
+    this.connectListeners.add(listener);
+    return () => this.connectListeners.delete(listener);
+  }
+
+  /**
+   * Take ownership of a peripheral iOS restored to us. It is already connected
+   * at the link layer, but this process has none of the per-connection state,
+   * so services must be rediscovered and the status notify re-subscribed
+   * before it is usable.
+   */
+  private async adoptRestored(device: Device): Promise<void> {
+    try {
+      if (!(await device.isConnected())) return;
+      await device.discoverAllServicesAndCharacteristics();
+      this.device = device;
+      this.subscribeToStatus();
+      device.onDisconnected(() => this.handleLinkLost());
+      // Same readiness problem as a fresh connect, and worse here: nothing is
+      // awaiting a promise, so an unproven link would be handed to the UI as
+      // fully working.
+      await this.handshake();
+      for (const listener of this.connectListeners) listener();
+    } catch {
+      // Restoration is best-effort: drop the half-adopted link and let the
+      // normal standing reconnect bring it up the ordinary way.
+      this.handleLinkLost();
+    }
+  }
+
+  /**
+   * Re-arm whenever the radio comes back (user toggled Bluetooth, Control
+   * Centre, Airplane mode). Without this the app sits disconnected until it is
+   * manually relaunched, which is exactly the "little broken" feeling.
+   */
+  onBluetoothReady(listener: () => void): () => void {
+    const sub = this.manager.onStateChange((state) => {
+      if (state === State.PoweredOn) listener();
+    }, true);
+    return () => sub.remove();
+  }
+
+  /** Cheap liveness probe — used when the app returns to the foreground. */
+  async verifyLink(): Promise<boolean> {
+    if (!this.device) return false;
+    try {
+      const alive = await this.manager.isDeviceConnected(this.device.id);
+      if (!alive) this.handleLinkLost();
+      return alive;
+    } catch {
+      this.handleLinkLost();
+      return false;
+    }
   }
 
   async isConnected(): Promise<boolean> {

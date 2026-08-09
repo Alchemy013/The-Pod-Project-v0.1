@@ -10,6 +10,7 @@
     "ios": {
       "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.alchemy13.ThePod",
+      "appleTeamId": "RG725XA2U3",
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "ThePod uses Bluetooth to connect to your music player.",
         "NSBluetoothPeripheralUsageDescription": "ThePod uses Bluetooth to connect to your music player.",
@@ -18,13 +19,14 @@
           "NSAllowsLocalNetworking": true
         },
         "UIBackgroundModes": [
-          "audio"
+          "audio",
+          "bluetooth-central"
         ]
       }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#EE3211",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -46,7 +48,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#121212",
+          "backgroundColor": "#0A0A0A",
           "android": {
             "image": "./assets/images/splash-icon.png",
             "imageWidth": 76

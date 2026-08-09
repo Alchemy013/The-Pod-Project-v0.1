@@ -20,6 +20,8 @@ interface PlayerStore extends NowPlaying {
   refresh: () => Promise<void>;
   loadQueue: () => Promise<void>;
   clearQueue: () => Promise<void>;
+  /** Resets local playback state. Does not touch what the Pod is doing. */
+  clear: () => void;
   addToQueue: (path: string) => Promise<void>;
   addedSongIds: Set<string>;
   applyNowPlaying: (data: {
@@ -44,17 +46,23 @@ const VOL_MAX = 15;
 const uiToMpd = (ui: number) => Math.round(Math.pow(ui / 100, 2) * VOL_MAX);
 const mpdToUi = (mpd: number) => Math.round(Math.sqrt(Math.max(0, mpd) / VOL_MAX) * 100);
 
-export const usePlayerStore = create<PlayerStore>((set, get) => ({
+const INITIAL = {
   song: null,
-  playbackState: 'stopped',
+  playbackState: 'stopped' as const,
   position: 0,
   duration: 0,
   volume: 50,
   shuffle: false,
-  repeat: 'off',
+  repeat: 'off' as RepeatMode,
   queue: [],
   queueIndex: 0,
-  addedSongIds: new Set(),
+  addedSongIds: new Set<string>(),
+};
+
+export const usePlayerStore = create<PlayerStore>((set, get) => ({
+  ...INITIAL,
+
+  clear: () => set({ ...INITIAL, addedSongIds: new Set<string>() }),
 
   play: () => podService.sendCommand({ cmd: 'PLAY' }),
   pause: () => podService.sendCommand({ cmd: 'PAUSE' }),

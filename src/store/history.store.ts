@@ -20,6 +20,8 @@ interface HistoryStore {
   loaded: boolean;
   load: () => Promise<void>;
   logPlay: (song: Song) => Promise<void>;
+  /** Drops the log in memory. The stored key is swept by the app reset. */
+  clear: () => void;
 }
 
 // Local-only, on-device play history: firmware/MPD has no concept of "plays",
@@ -29,6 +31,10 @@ interface HistoryStore {
 export const useHistoryStore = create<HistoryStore>((set, get) => ({
   entries: [],
   loaded: false,
+
+  // `loaded` goes back to false so a later load() re-reads from storage rather
+  // than short-circuiting on a stale flag.
+  clear: () => set({ entries: [], loaded: false }),
 
   load: async () => {
     if (get().loaded) return;

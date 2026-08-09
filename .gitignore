@@ -50,3 +50,7 @@ AGENTS.md
 # generated/cache
 brag-output/
 firmware/__pycache__/
+
+# design sources — multi-MB binaries. Kept next to the repo, never in it:
+# binaries are near-impossible to strip from history once pushed.
+*.pdf

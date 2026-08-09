@@ -1,9 +1,9 @@
 import { Redirect } from 'expo-router';
 
-// The initial URL is "/", and the redesign moved the old src/app/index.tsx to
-// src/app/library/index.tsx — leaving nothing to match "/". Expo Router then
-// resolves no route, never mounts the root layout, and the app renders blank
-// with no error. This is the entry point that sends "/" at the Library tab.
+// The initial URL is "/", and no screen file matches it — Expo Router would
+// resolve nothing, never mount the root layout, and render a blank app with no
+// error anywhere. src/app must always have an index route; this one points "/"
+// at the Home tab.
 export default function Index() {
-  return <Redirect href="/library" />;
+  return <Redirect href="/home" />;
 }

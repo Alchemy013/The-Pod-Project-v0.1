@@ -7,11 +7,11 @@ export default function LibraryLayout() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: Palette.bg },
+        animation: 'slide_from_right',
       }}
     >
       <Stack.Screen name="index" />
       <Stack.Screen name="album/[id]" />
-      <Stack.Screen name="search" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

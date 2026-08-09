@@ -4,88 +4,96 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Icon } from '@/components/ui/icons';
 import { usePlayerStore } from '@/store/player.store';
+import { useArt } from '@/store/art.store';
 import { Song } from '@/types/music';
 import { Palette, Font } from '@/constants/theme';
 import { AlbumArt } from '@/components/ui/AlbumArt';
+import { HeaderWash, IconCircle, Overline, PlayingBars } from '@/components/ui/controls';
 
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-function NowPlayingBars() {
-  const heights = [10, 18, 7, 14];
+function QueueRow({ song, onPress }: { song: Song; onPress: () => void }) {
+  const art = useArt(song.path, 'small');
   return (
-    <View style={s.bars}>
-      {heights.map((h, i) => <View key={i} style={[s.bar, { height: h }]} />)}
-    </View>
+    <Pressable style={({ pressed }) => [s.row, pressed && { opacity: 0.6 }]} onPress={onPress}>
+      {/* Decorative until the firmware grows a reorder command — it marks the
+          row as a queue item rather than promising a drag. */}
+      <Icon name="drag-handle" size={15} color={Palette.inactive} strokeWidth={2} />
+      <AlbumArt uri={art} seedKey={song.albumId || song.album || song.title} size={42} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={s.rowTitle} numberOfLines={1}>{song.title}</Text>
+        <Text style={s.rowSub} numberOfLines={1}>{song.artist}</Text>
+      </View>
+    </Pressable>
   );
 }
 
 export default function QueueScreen() {
-  // Was a hardcoded paddingTop:64, which only happened to match this
-  // phone's inset. Use the real one.
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { queue, queueIndex, playSong, loadQueue, clearQueue, addedSongIds } = usePlayerStore();
+  const { queue, queueIndex, playbackState, shuffle, playSong, loadQueue, clearQueue, toggleShuffle, addedSongIds } =
+    usePlayerStore();
 
   useEffect(() => { loadQueue(); }, []);
 
-  const upcoming = queue.slice(queueIndex + 1);
-  const continuing = upcoming.filter((s) => !addedSongIds.has(s.id));
-  const addedByYou = upcoming.filter((s) => addedSongIds.has(s.id));
-  const minutesLeft = Math.round(upcoming.reduce((sum, s) => sum + s.duration, 0) / 60);
   const current = queue[queueIndex];
+  const upcoming = queue.slice(queueIndex + 1);
+  const continuing = upcoming.filter((sg) => !addedSongIds.has(sg.id));
+  const addedByYou = upcoming.filter((sg) => addedSongIds.has(sg.id));
+  const currentArt = useArt(current?.path, 'small');
 
   const sections = [
-    ...(continuing.length ? [{ title: 'Continuing from the album', data: continuing }] : []),
+    ...(continuing.length ? [{ title: 'Up next', data: continuing }] : []),
     ...(addedByYou.length ? [{ title: 'Added by you', data: addedByYou }] : []),
   ];
 
   return (
     <View style={s.container}>
-      <View style={[s.header, { paddingTop: insets.top + 10 }]}>
-        <View>
-          <Text style={s.metaLine}>{upcoming.length} tracks · {minutesLeft} min left</Text>
-          <Text style={s.title}>Up next</Text>
-        </View>
-        {upcoming.length > 0 && (
-          <Pressable onPress={clearQueue}><Text style={s.clear}>Clear</Text></Pressable>
-        )}
+      <HeaderWash seedKey={current?.albumId || current?.album || 'thepod'} height={240} />
+
+      <View style={[s.nav, { paddingTop: insets.top + 2 }]}>
+        <IconCircle name="chevron-left" label="Back" onPress={() => router.back()} />
+        <Text style={s.navTitle}>Queue</Text>
+        <Pressable
+          onPress={toggleShuffle}
+          hitSlop={12}
+          style={s.navRight}
+          accessibilityRole="button"
+          accessibilityLabel="Shuffle"
+        >
+          <Icon name="shuffle" size={19} color={shuffle ? Palette.accent : Palette.textSecondary} />
+        </Pressable>
       </View>
 
       <SectionList
         sections={sections}
         keyExtractor={(item, i) => item.id || String(i)}
-        ListHeaderComponent={current ? (
-          <View style={s.currentRow}>
-            <AlbumArt uri={null} seedKey={current.album || current.title} title={current.album || current.title} size={56} />
-            <View style={s.info}>
-              <Text style={s.nowPlayingLabel}>Now playing</Text>
-              <Text style={s.songTitle} numberOfLines={1}>{current.title}</Text>
-              <Text style={s.songArtist} numberOfLines={1}>{current.artist}</Text>
-            </View>
-            <NowPlayingBars />
-          </View>
-        ) : null}
-        renderSectionHeader={({ section }) => <Text style={s.sectionLabel}>{section.title}</Text>}
-        renderItem={({ item }: { item: Song }) => (
-          <Pressable
-            style={({ pressed }) => [s.row, pressed && { opacity: 0.6 }]}
-            onPress={() => { playSong(item.path); router.back(); }}
-          >
-            <Icon name="drag-handle" size={16} color={Palette.border} />
-            <AlbumArt uri={null} seedKey={item.album || item.title} title={item.album || item.title} size={36} />
-            <View style={s.info}>
-              <Text style={s.rowTitle} numberOfLines={1}>{item.title}</Text>
-              <Text style={s.songArtist} numberOfLines={1}>{item.artist}</Text>
-            </View>
-            <Text style={s.dur}>{formatTime(item.duration)}</Text>
-          </Pressable>
-        )}
         contentContainerStyle={s.list}
-        ListEmptyComponent={<Text style={s.empty}>Nothing queued after this track</Text>}
+        ListHeaderComponent={current ? (
+          <>
+            <Overline style={{ paddingBottom: 10 }}>Now playing</Overline>
+            <View style={s.currentRow}>
+              <AlbumArt uri={currentArt} seedKey={current.albumId || current.album || current.title} size={48} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.currentTitle} numberOfLines={1}>{current.title}</Text>
+                <Text style={s.rowSub} numberOfLines={1}>{current.artist}</Text>
+              </View>
+              {playbackState === 'playing' && <PlayingBars />}
+            </View>
+          </>
+        ) : null}
+        renderSectionHeader={({ section }) => (
+          <View style={s.sectionRow}>
+            <Overline>{section.title}</Overline>
+            {section.title === 'Up next' && (
+              <Pressable onPress={clearQueue} hitSlop={10} accessibilityRole="button">
+                <Text style={s.clear}>Clear</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+        renderItem={({ item }) => (
+          <QueueRow song={item} onPress={() => { playSong(item.path); router.back(); }} />
+        )}
+        ListEmptyComponent={<Text style={s.empty}>Nothing queued after this track.</Text>}
       />
     </View>
   );
@@ -93,40 +101,25 @@ export default function QueueScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: Palette.bg },
-  header: {
-    flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingBottom: 14,
-    borderBottomWidth: 2, borderBottomColor: Palette.divider,
+
+  nav: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, paddingBottom: 12 },
+  navTitle: { flex: 1, textAlign: 'center', fontFamily: Font.bold, fontSize: 15, color: Palette.text },
+  navRight: { width: 36, alignItems: 'center' },
+
+  list: { paddingHorizontal: 20, paddingBottom: 150 },
+
+  currentRow: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 8 },
+  currentTitle: { fontFamily: Font.bold, fontSize: 15, color: Palette.accent },
+
+  sectionRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline',
+    backgroundColor: Palette.bg, paddingTop: 22, paddingBottom: 6,
   },
-  metaLine: { fontFamily: Font.bold, fontSize: 10, letterSpacing: 1.3, textTransform: 'uppercase', color: Palette.textSecondary, marginBottom: 6 },
-  title: { fontFamily: Font.heading, fontSize: 40, letterSpacing: -1, color: Palette.text },
-  clear: { fontFamily: Font.heading, fontSize: 11, letterSpacing: 1.0, textTransform: 'uppercase', color: Palette.accent, paddingBottom: 4 },
+  clear: { fontFamily: Font.medium, fontSize: 12, color: Palette.textSecondary },
 
-  list: { paddingHorizontal: 20, paddingBottom: 140 },
-
-  currentRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingVertical: 16, borderBottomWidth: 2, borderBottomColor: Palette.divider,
-  },
-  nowPlayingLabel: { fontFamily: Font.bold, fontSize: 9, letterSpacing: 1.2, textTransform: 'uppercase', color: Palette.accent, marginBottom: 3 },
-  songTitle: { fontFamily: Font.bold, fontSize: 15, color: Palette.text },
-  songArtist: { fontFamily: Font.regular, fontSize: 12, color: Palette.textSecondary, marginTop: 1 },
-
-  sectionLabel: {
-    fontFamily: Font.bold, fontSize: 9, letterSpacing: 1.2, textTransform: 'uppercase', color: Palette.borderFaint,
-    backgroundColor: Palette.bg, paddingTop: 18, paddingBottom: 10,
-  },
-
-  row: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Palette.divider,
-  },
-  rowTitle: { fontFamily: Font.medium, fontSize: 14, color: Palette.text },
-  info: { flex: 1, minWidth: 0 },
-  dur: { fontFamily: Font.regular, fontSize: 11, color: Palette.textSecondary, fontVariant: ['tabular-nums'] },
-
-  bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 18 },
-  bar: { width: 3, backgroundColor: Palette.accent },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9 },
+  rowTitle: { fontFamily: Font.medium, fontSize: 14.5, color: Palette.text },
+  rowSub: { fontFamily: Font.regular, fontSize: 12.5, color: Palette.textSecondary, marginTop: 2 },
 
   empty: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 14, textAlign: 'center', paddingTop: 60 },
 });
