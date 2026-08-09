@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
 import { ErrorBoundary as AppErrorBoundary } from '@/components/ErrorBoundary';
 import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import TrackPlayer from 'react-native-track-player';
@@ -136,6 +137,11 @@ export default function RootLayout() {
         <SafeAreaProvider>
           <ThemeProvider value={DarkTheme}>
             <NotificationSync />
+            {/* Every Reanimated animation in the app now respects
+                Settings › Accessibility › Motion › Reduce Motion. Individual
+                animations opt back in with `reduceMotion: ReduceMotion.Never`
+                where the motion carries information rather than decoration. */}
+            <ReducedMotionConfig mode={ReduceMotion.System} />
             {!onboarded ? <Onboarding onDone={completeOnboarding} />
               : !isConnected ? <PairingScreen />
               : (

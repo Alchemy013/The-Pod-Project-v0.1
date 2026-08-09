@@ -8,7 +8,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, type IconName } from '@/components/ui/icons';
-import { Palette, Font } from '@/constants/theme';
+import { Motion, Palette, Font, Type } from '@/constants/theme';
 import { MiniPlayer } from '@/components/MiniPlayer';
 
 // Search is not a tab: it lives inside Library as a field that filters the list
@@ -32,7 +32,7 @@ function TabIcon({ icon, label, active }: { icon: IconName; label: string; activ
 
   useEffect(() => {
     lift.value = active
-      ? withSpring(1, { damping: 12, stiffness: 260, mass: 0.5 })
+      ? withSpring(1, Motion.spring.tab)
       : withTiming(0, { duration: 160, easing: Easing.out(Easing.quad) });
   }, [active]);
 
@@ -100,5 +100,5 @@ const styles = StyleSheet.create({
   // the indicator line draws through the tab bar.
   bar: { flexDirection: 'row', paddingTop: 11, backgroundColor: Palette.bg },
   cell: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 5, paddingBottom: 8 },
-  label: { fontSize: 10.5 },
+  label: { fontSize: Type.micro },
 });

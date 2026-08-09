@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { usePodInfoStore } from '@/store/pod.store';
-import { Palette, Font, Radius } from '@/constants/theme';
+import { Palette, Font, Radius, Type } from '@/constants/theme';
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { NavRow } from '@/components/ui/NavRow';
+import { Skeleton, SkeletonRow } from '@/components/ui/controls';
 
 const POLL_MS = 20000;
 
@@ -24,10 +25,23 @@ export default function BatteryScreen() {
     return () => clearInterval(t);
   }, []);
 
+  // The readout's shape is fixed — a cell, a big percentage, a status line and
+  // three rows — so it draws that rather than a spinner. The hero keeps its own
+  // padding, so nothing jumps when the first BLE reading lands.
   if (!battery) {
     return (
-      <View style={s.loading}>
-        <ActivityIndicator color={Palette.textSecondary} size="large" />
+      <View style={s.container}>
+        <View style={s.hero}>
+          <Skeleton width={64} height={28} radius={Radius.xs} style={{ marginBottom: 8 }} />
+          <Skeleton width={110} height={40} radius={Radius.xs} />
+          <Skeleton width={130} height={13} radius={Radius.xs} />
+        </View>
+        <SectionHeader>Details</SectionHeader>
+        <Card>
+          <SkeletonRow art={0} />
+          <SkeletonRow art={0} />
+          <SkeletonRow art={0} />
+        </Card>
       </View>
     );
   }
@@ -79,16 +93,16 @@ const s = StyleSheet.create({
   hero: { alignItems: 'center', paddingVertical: 34, gap: 8 },
   batteryRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   shell: {
-    width: 104, height: 46, borderRadius: 10, borderWidth: 3, borderColor: Palette.control,
+    width: 104, height: 46, borderRadius: Radius.md, borderWidth: 3, borderColor: Palette.control,
     padding: 4, overflow: 'hidden',
   },
   fill: { height: '100%', borderRadius: 4 },
   nub: { width: 6, height: 18, borderRadius: 3, backgroundColor: Palette.control, marginLeft: 3 },
-  percent: { color: Palette.text, fontFamily: Font.heading, fontSize: 40 },
-  status: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 15 },
+  percent: { color: Palette.text, fontFamily: Font.heading, fontSize: Type.display },
+  status: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: Type.headline },
 
   note: {
-    fontFamily: Font.regular, fontSize: 12, lineHeight: 18, color: Palette.textMuted,
+    fontFamily: Font.regular, fontSize: Type.caption, lineHeight: 18, color: Palette.textMuted,
     paddingHorizontal: 20, paddingTop: 8,
   },
 });

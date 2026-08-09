@@ -5,8 +5,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Device } from 'react-native-ble-plx';
 import { useBluetoothStore } from '@/store/bluetooth.store';
 import { POD_DEVICE_NAME } from '@/services/bluetooth/protocol';
-import { Palette, Font, Radius } from '@/constants/theme';
-import { HeaderWash, PillButton, Pulse } from '@/components/ui/controls';
+import { Palette, Font, Radius, Type } from '@/constants/theme';
+import { HeaderWash, PillButton, Pressed, Pulse } from '@/components/ui/controls';
 
 const SAVED_DEVICE_KEY = 'thepod_device_id';
 
@@ -20,8 +20,9 @@ function rssiColor(rssi: number | null): string {
 function DeviceCard({ device, isPod, onPress }: { device: Device; isPod: boolean; onPress: () => void }) {
   const name = device.name ?? device.localName ?? 'Unknown';
   return (
-    <Pressable
-      style={({ pressed }) => [s.card, { borderColor: isPod ? Palette.accent : Palette.rail }, pressed && { opacity: 0.7 }]}
+    <Pressed
+      style={[s.card, { borderColor: isPod ? Palette.accent : Palette.rail }]}
+      label={name}
       onPress={onPress}
     >
       <View style={s.cardIcon}>
@@ -36,7 +37,7 @@ function DeviceCard({ device, isPod, onPress }: { device: Device; isPod: boolean
       <Text style={[s.rssi, { color: rssiColor(device.rssi) }]}>
         {device.rssi != null ? `${device.rssi} dBm` : '—'}
       </Text>
-    </Pressable>
+    </Pressed>
   );
 }
 
@@ -195,8 +196,8 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: Palette.bg },
 
   head: { paddingHorizontal: 24, gap: 10 },
-  title: { fontFamily: Font.heading, fontSize: 29, lineHeight: 34, color: Palette.text },
-  body: { fontFamily: Font.regular, fontSize: 15, lineHeight: 23, color: 'rgba(255,255,255,0.62)', maxWidth: 320 },
+  title: { fontFamily: Font.heading, fontSize: Type.title1, lineHeight: 34, color: Palette.text },
+  body: { fontFamily: Font.regular, fontSize: Type.headline, lineHeight: 23, color: 'rgba(255,255,255,0.62)', maxWidth: 320 },
 
   radar: { alignItems: 'center', gap: 14, paddingTop: 26, paddingBottom: 22 },
   radarRing: {
@@ -205,7 +206,7 @@ const s = StyleSheet.create({
   },
   radarInner: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   radarDot: { width: 9, height: 9, borderRadius: 5 },
-  status: { fontFamily: Font.medium, fontSize: 15, color: Palette.textSecondary },
+  status: { fontFamily: Font.medium, fontSize: Type.headline, color: Palette.textSecondary },
 
   list: { paddingHorizontal: 20 },
   card: {
@@ -218,17 +219,17 @@ const s = StyleSheet.create({
   },
   cardRing: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   cardDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Palette.accent },
-  cardName: { fontFamily: Font.medium, fontSize: 15, color: Palette.text },
-  cardId: { fontFamily: Font.mono, fontSize: 11, color: Palette.textSecondary },
-  rssi: { fontFamily: Font.mono, fontSize: 12 },
+  cardName: { fontFamily: Font.medium, fontSize: Type.headline, color: Palette.text },
+  cardId: { fontFamily: Font.mono, fontSize: Type.micro, color: Palette.textSecondary },
+  rssi: { fontFamily: Font.mono, fontSize: Type.caption },
 
   empty: { alignItems: 'center', gap: 9, paddingTop: 30, paddingHorizontal: 20 },
   emptyRing: { width: 46, height: 46, borderRadius: 23, borderWidth: 2, borderStyle: 'dashed', borderColor: Palette.control },
-  emptyTitle: { fontFamily: Font.heading, fontSize: 18, color: Palette.text },
-  emptyBody: { fontFamily: Font.regular, fontSize: 14, lineHeight: 21, color: Palette.textSecondary, textAlign: 'center' },
+  emptyTitle: { fontFamily: Font.heading, fontSize: Type.title3, color: Palette.text },
+  emptyBody: { fontFamily: Font.regular, fontSize: Type.body, lineHeight: 21, color: Palette.textSecondary, textAlign: 'center' },
 
-  error: { fontFamily: Font.regular, fontSize: 13, color: Palette.danger, textAlign: 'center', paddingHorizontal: 20 },
+  error: { fontFamily: Font.regular, fontSize: Type.callout, color: Palette.danger, textAlign: 'center', paddingHorizontal: 20 },
   cta: { paddingHorizontal: 20, paddingTop: 14 },
   linkBtn: { alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 16 },
-  linkText: { fontFamily: Font.medium, fontSize: 14, color: Palette.textSecondary },
+  linkText: { fontFamily: Font.medium, fontSize: Type.body, color: Palette.textSecondary },
 });

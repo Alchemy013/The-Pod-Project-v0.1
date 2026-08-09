@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View, Pressable } from 'react-native';
-import { Palette, Font } from '@/constants/theme';
+import { Palette, Font, Type } from '@/constants/theme';
 
 /**
  * Section heading in the v2 feed idiom: a 19px title, optionally with a
@@ -27,6 +27,6 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingTop: 22, paddingBottom: 12,
   },
-  title: { color: Palette.text, fontFamily: Font.heading, fontSize: 19 },
-  action: { color: Palette.textMuted, fontFamily: Font.medium, fontSize: 12 },
+  title: { color: Palette.text, fontFamily: Font.heading, fontSize: Type.title3 },
+  action: { color: Palette.textMuted, fontFamily: Font.medium, fontSize: Type.caption },
 });

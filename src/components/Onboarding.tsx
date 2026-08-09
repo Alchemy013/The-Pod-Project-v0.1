@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, {
+  FadeInDown, interpolateColor, useAnimatedStyle, useSharedValue, withSpring,
+} from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Palette, Font } from '@/constants/theme';
+import { Motion, Palette, Font, Radius, Type } from '@/constants/theme';
 import { PillButton, Pulse } from '@/components/ui/controls';
 
 const MARK = 126;
@@ -25,6 +27,30 @@ const STEPS = [
     body: 'ThePod needs Bluetooth to find and control your device. It never uses location data and nothing leaves your network.',
   },
 ] as const;
+
+const DOT_ON = 22;
+const DOT_OFF = 6;
+
+/**
+ * Pager dot that stretches into the active pill instead of teleporting into it.
+ *
+ * This is the one place in the app that animates `width`, and it's deliberate:
+ * there are three of them, they move once per tap, and this screen is shown
+ * exactly once per install. The usual fix — a fixed-width slot with `scaleX` —
+ * would leave 22pt gaps between the two inactive dots and change the design.
+ * Don't read this as licence to animate layout in a list or under a finger.
+ */
+function Dot({ active }: { active: boolean }) {
+  const on = useSharedValue(active ? 1 : 0);
+  useEffect(() => { on.value = withSpring(active ? 1 : 0, Motion.spring.tab); }, [active]);
+
+  const style = useAnimatedStyle(() => ({
+    width: DOT_OFF + on.value * (DOT_ON - DOT_OFF),
+    backgroundColor: interpolateColor(on.value, [0, 1], ['rgba(255,255,255,0.22)', Palette.accent]),
+  }));
+
+  return <Animated.View style={[s.dot, style]} />;
+}
 
 export function Onboarding({ onDone }: { onDone: () => void }) {
   const insets = useSafeAreaInsets();
@@ -51,17 +77,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       </View>
 
       <View style={s.dots}>
-        {STEPS.map((_, i) => (
-          <View
-            key={i}
-            style={[
-              s.dot,
-              i === step
-                ? { width: 22, backgroundColor: Palette.accent }
-                : { width: 6, backgroundColor: 'rgba(255,255,255,0.22)' },
-            ]}
-          />
-        ))}
+        {STEPS.map((_, i) => <Dot key={i} active={i === step} />)}
       </View>
 
       {/* The button never asks for Bluetooth itself — dismissing onboarding
@@ -91,18 +107,18 @@ const s = StyleSheet.create({
   markLetter: { fontFamily: Font.heading, fontSize: 74, lineHeight: 82, color: Palette.accentText },
 
   copy: { gap: 13, alignItems: 'center' },
-  title: { fontFamily: Font.heading, fontSize: 29, lineHeight: 33, color: Palette.text, textAlign: 'center' },
+  title: { fontFamily: Font.heading, fontSize: Type.title1, lineHeight: 33, color: Palette.text, textAlign: 'center' },
   text: {
-    fontFamily: Font.regular, fontSize: 15, lineHeight: 24,
+    fontFamily: Font.regular, fontSize: Type.headline, lineHeight: 24,
     color: 'rgba(255,255,255,0.62)', textAlign: 'center',
   },
 
   dots: { flexDirection: 'row', gap: 6, justifyContent: 'center', marginBottom: 24 },
   dot: { height: 6, borderRadius: 3 },
 
-  cta: { paddingVertical: 17, borderRadius: 30, marginBottom: 10 },
+  cta: { paddingVertical: 17, borderRadius: Radius.pill, marginBottom: 10 },
   skip: {
-    fontFamily: Font.medium, fontSize: 14, color: 'rgba(255,255,255,0.5)',
+    fontFamily: Font.medium, fontSize: Type.body, color: 'rgba(255,255,255,0.5)',
     textAlign: 'center', paddingVertical: 8,
   },
 });

@@ -3,6 +3,11 @@ import { ScrollView, Text, View } from 'react-native';
 
 // Release builds suppress RN's red-box, so an uncaught render error otherwise
 // just shows a blank screen with zero diagnostics. This makes it visible.
+//
+// Deliberately exempt from the design tokens: every colour, size and font here
+// is a literal. This is the screen that has to render when something else has
+// already failed, so it takes no dependency it doesn't strictly need — not even
+// `@/constants/theme`. Don't "tidy" these onto `Type` and `Palette`.
 export class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
 

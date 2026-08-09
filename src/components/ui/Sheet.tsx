@@ -1,6 +1,6 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '@/components/ui/icons';
-import { Palette, Font } from '@/constants/theme';
+import { Palette, Font, Type } from '@/constants/theme';
 
 export function Sheet({ visible, onClose, title, children }: {
   visible: boolean;
@@ -34,5 +34,5 @@ const s = StyleSheet.create({
   sheet: { flex: 1, backgroundColor: Palette.bg, paddingTop: 12 },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: Palette.control, alignSelf: 'center', marginBottom: 16 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 8 },
-  title: { color: Palette.text, fontFamily: Font.heading, fontSize: 20 },
+  title: { color: Palette.text, fontFamily: Font.heading, fontSize: Type.title3 },
 });

@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { Palette, Font } from '@/constants/theme';
+import { Palette, Font, Type } from '@/constants/theme';
 
 export default function PodLayout() {
   return (
@@ -7,7 +7,7 @@ export default function PodLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: Palette.bg },
         headerTintColor: Palette.accent,
-        headerTitleStyle: { color: Palette.text, fontFamily: Font.bold, fontSize: 16 },
+        headerTitleStyle: { color: Palette.text, fontFamily: Font.bold, fontSize: Type.headline },
         headerShadowVisible: false,
         // The Pod landing screen has headerShown:false and therefore no title,
         // so the back button fell back to printing the route name — "index".

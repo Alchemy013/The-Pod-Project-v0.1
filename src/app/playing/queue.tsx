@@ -6,14 +6,15 @@ import { Icon } from '@/components/ui/icons';
 import { usePlayerStore } from '@/store/player.store';
 import { useArt } from '@/store/art.store';
 import { Song } from '@/types/music';
-import { Palette, Font } from '@/constants/theme';
+import { Palette, Font, Type } from '@/constants/theme';
 import { AlbumArt } from '@/components/ui/AlbumArt';
-import { HeaderWash, IconCircle, Overline, PlayingBars } from '@/components/ui/controls';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { HeaderWash, IconCircle, Overline, Pressed, PlayingBars } from '@/components/ui/controls';
 
 function QueueRow({ song, onPress }: { song: Song; onPress: () => void }) {
   const art = useArt(song.path, 'small');
   return (
-    <Pressable style={({ pressed }) => [s.row, pressed && { opacity: 0.6 }]} onPress={onPress}>
+    <Pressed style={s.row} onPress={onPress} label={song.title}>
       {/* Decorative until the firmware grows a reorder command — it marks the
           row as a queue item rather than promising a drag. */}
       <Icon name="drag-handle" size={15} color={Palette.inactive} strokeWidth={2} />
@@ -22,7 +23,7 @@ function QueueRow({ song, onPress }: { song: Song; onPress: () => void }) {
         <Text style={s.rowTitle} numberOfLines={1}>{song.title}</Text>
         <Text style={s.rowSub} numberOfLines={1}>{song.artist}</Text>
       </View>
-    </Pressable>
+    </Pressed>
   );
 }
 
@@ -93,7 +94,14 @@ export default function QueueScreen() {
         renderItem={({ item }) => (
           <QueueRow song={item} onPress={() => { playSong(item.path); router.back(); }} />
         )}
-        ListEmptyComponent={<Text style={s.empty}>Nothing queued after this track.</Text>}
+        ListEmptyComponent={
+          <EmptyState
+            compact
+            icon="queue"
+            title="Nothing up next"
+            subtitle="Play an album and the rest of it queues automatically."
+          />
+        }
       />
     </View>
   );
@@ -103,23 +111,22 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: Palette.bg },
 
   nav: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, paddingBottom: 12 },
-  navTitle: { flex: 1, textAlign: 'center', fontFamily: Font.bold, fontSize: 15, color: Palette.text },
+  navTitle: { flex: 1, textAlign: 'center', fontFamily: Font.bold, fontSize: Type.headline, color: Palette.text },
   navRight: { width: 36, alignItems: 'center' },
 
   list: { paddingHorizontal: 20, paddingBottom: 150 },
 
   currentRow: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 8 },
-  currentTitle: { fontFamily: Font.bold, fontSize: 15, color: Palette.accent },
+  currentTitle: { fontFamily: Font.bold, fontSize: Type.headline, color: Palette.accent },
 
   sectionRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline',
     backgroundColor: Palette.bg, paddingTop: 22, paddingBottom: 6,
   },
-  clear: { fontFamily: Font.medium, fontSize: 12, color: Palette.textSecondary },
+  clear: { fontFamily: Font.medium, fontSize: Type.caption, color: Palette.textSecondary },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9 },
-  rowTitle: { fontFamily: Font.medium, fontSize: 14.5, color: Palette.text },
-  rowSub: { fontFamily: Font.regular, fontSize: 12.5, color: Palette.textSecondary, marginTop: 2 },
+  rowTitle: { fontFamily: Font.medium, fontSize: Type.body, color: Palette.text },
+  rowSub: { fontFamily: Font.regular, fontSize: Type.caption, color: Palette.textSecondary, marginTop: 2 },
 
-  empty: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 14, textAlign: 'center', paddingTop: 60 },
 });

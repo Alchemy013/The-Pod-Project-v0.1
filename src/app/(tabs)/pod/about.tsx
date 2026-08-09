@@ -2,7 +2,7 @@ import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useBluetoothStore } from '@/store/bluetooth.store';
 import { usePodInfoStore } from '@/store/pod.store';
 import { useAppStore } from '@/store/app.store';
-import { Palette, Font, Radius } from '@/constants/theme';
+import { Palette, Font, Radius, Type } from '@/constants/theme';
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { NavRow } from '@/components/ui/NavRow';
@@ -78,12 +78,12 @@ const s = StyleSheet.create({
     width: 72, height: 72, borderRadius: Radius.card, backgroundColor: Palette.accent,
     alignItems: 'center', justifyContent: 'center',
   },
-  markText: { fontFamily: Font.heading, fontSize: 40, color: Palette.accentText },
-  name: { color: Palette.text, fontFamily: Font.heading, fontSize: 20 },
-  address: { color: Palette.textMuted, fontFamily: Font.mono, fontSize: 12 },
+  markText: { fontFamily: Font.heading, fontSize: Type.display, color: Palette.accentText },
+  name: { color: Palette.text, fontFamily: Font.heading, fontSize: Type.title3 },
+  address: { color: Palette.textMuted, fontFamily: Font.mono, fontSize: Type.caption },
 
   resetNote: {
-    color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 13, lineHeight: 20,
+    color: Palette.textSecondary, fontFamily: Font.regular, fontSize: Type.callout, lineHeight: 20,
     paddingHorizontal: 20, paddingBottom: 14,
   },
   resetButton: { marginHorizontal: 20 },

@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { podService } from '@/services/bluetooth/BluetoothService';
 import { usePodInfoStore } from '@/store/pod.store';
-import { Palette, Font, Radius } from '@/constants/theme';
+import { Palette, Font, Radius, Type } from '@/constants/theme';
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { RowTitle, RowSubtitle } from '@/components/ui/Row';
-import { PillButton } from '@/components/ui/controls';
+import { PillButton, Pressed } from '@/components/ui/controls';
 
 type WifiNetwork = { ssid: string; signal: number; secured: boolean };
 
@@ -142,6 +142,10 @@ export default function NetworkScreen() {
       </View>
       {scanning ? (
         <View style={s.center}>
+          {/* The one place a spinner is right, and it stays. A Wi-Fi scan has no
+              known result shape — 0 to 30 networks with unknown names — so a
+              skeleton would promise rows that may never exist. Everywhere else
+              in the app, loading is a `Skeleton` of the thing that's coming. */}
           <ActivityIndicator color={Palette.textSecondary} size="large" />
           <RowSubtitle>Scanning for networks…</RowSubtitle>
         </View>
@@ -152,8 +156,9 @@ export default function NetworkScreen() {
           contentContainerStyle={{ paddingBottom: 40 }}
           ListEmptyComponent={<Text style={s.emptySub}>No networks found</Text>}
           renderItem={({ item }) => (
-            <Pressable
-              style={({ pressed }) => [s.netRow, pressed && { opacity: 0.6 }]}
+            <Pressed
+              style={s.netRow}
+              label={item.ssid}
               onPress={() => { setSelectedNet(item); setWifiPwd(''); setWifiError(null); }}
             >
               <View style={s.netInfo}>
@@ -161,7 +166,7 @@ export default function NetworkScreen() {
                 <RowSubtitle>{item.secured ? 'Secured' : 'Open'}</RowSubtitle>
               </View>
               <Text style={s.netSignal}>{item.signal}%</Text>
-            </Pressable>
+            </Pressed>
           )}
         />
       )}
@@ -177,19 +182,19 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingBottom: 10,
   },
-  listHeaderTitle: { color: Palette.text, fontFamily: Font.heading, fontSize: 19 },
-  cancelText: { color: Palette.accent, fontFamily: Font.medium, fontSize: 15 },
+  listHeaderTitle: { color: Palette.text, fontFamily: Font.heading, fontSize: Type.title3 },
+  cancelText: { color: Palette.accent, fontFamily: Font.medium, fontSize: Type.headline },
 
   statusRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
   statusInfo: { flex: 1 },
   signalBadge: {
     backgroundColor: Palette.rail, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 5,
   },
-  signalText: { color: Palette.textSecondary, fontFamily: Font.mono, fontSize: 12 },
+  signalText: { color: Palette.textSecondary, fontFamily: Font.mono, fontSize: Type.caption },
 
   buttons: { paddingHorizontal: 20, paddingTop: 18 },
   note: {
-    color: Palette.textMuted, fontFamily: Font.regular, fontSize: 12, lineHeight: 18,
+    color: Palette.textMuted, fontFamily: Font.regular, fontSize: Type.caption, lineHeight: 18,
     paddingHorizontal: 20, paddingTop: 16,
   },
 
@@ -199,25 +204,25 @@ const s = StyleSheet.create({
     backgroundColor: Palette.surface, borderRadius: Radius.lg,
   },
   netInfo: { flex: 1 },
-  netSignal: { color: Palette.textSecondary, fontFamily: Font.mono, fontSize: 12 },
-  emptySub: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 14, textAlign: 'center', paddingHorizontal: 20, paddingTop: 40 },
+  netSignal: { color: Palette.textSecondary, fontFamily: Font.mono, fontSize: Type.caption },
+  emptySub: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: Type.body, textAlign: 'center', paddingHorizontal: 20, paddingTop: 40 },
 
   pwdContainer: { flex: 1, backgroundColor: Palette.bg, padding: 24, gap: 16 },
-  pwdNetName: { color: Palette.text, fontFamily: Font.heading, fontSize: 20, marginBottom: 4 },
+  pwdNetName: { color: Palette.text, fontFamily: Font.heading, fontSize: Type.title3, marginBottom: 4 },
   pwdInput: {
     backgroundColor: Palette.surface, borderRadius: Radius.md, paddingHorizontal: 14,
-    paddingVertical: 13, color: Palette.text, fontFamily: Font.regular, fontSize: 16,
+    paddingVertical: 13, color: Palette.text, fontFamily: Font.regular, fontSize: Type.headline,
   },
-  errorText: { color: Palette.danger, fontFamily: Font.regular, fontSize: 13, marginTop: 8, textAlign: 'center' },
+  errorText: { color: Palette.danger, fontFamily: Font.regular, fontSize: Type.callout, marginTop: 8, textAlign: 'center' },
   pwdBtnRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
   backBtn: {
-    flex: 1, paddingVertical: 14, borderRadius: 26,
+    flex: 1, paddingVertical: 14, borderRadius: Radius.pill,
     borderWidth: 1, borderColor: Palette.inactive, alignItems: 'center',
   },
-  backBtnText: { color: Palette.textSecondary, fontFamily: Font.bold, fontSize: 14.5 },
+  backBtnText: { color: Palette.textSecondary, fontFamily: Font.bold, fontSize: Type.body },
   connectBtn: {
-    flex: 2, paddingVertical: 14, borderRadius: 26,
+    flex: 2, paddingVertical: 14, borderRadius: Radius.pill,
     backgroundColor: Palette.accent, alignItems: 'center', justifyContent: 'center', minHeight: 48,
   },
-  connectBtnText: { color: Palette.accentText, fontFamily: Font.bold, fontSize: 14.5 },
+  connectBtnText: { color: Palette.accentText, fontFamily: Font.bold, fontSize: Type.body },
 });

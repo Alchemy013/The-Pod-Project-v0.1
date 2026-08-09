@@ -6,7 +6,7 @@ import { useLibraryStore } from '@/store/library.store';
 import { usePodInfoStore } from '@/store/pod.store';
 import { pickAudioFiles, uploadFiles, UploadFile, UploadProgress } from '@/services/transfer/UploadService';
 import { isPodReachable, openWifiSettings } from '@/services/transfer/WifiService';
-import { Palette, Font, Radius } from '@/constants/theme';
+import { Palette, Font, Radius, Type } from '@/constants/theme';
 import { PillButton } from '@/components/ui/controls';
 
 type FileState = 'queued' | 'active' | 'done';
@@ -173,19 +173,19 @@ const s = StyleSheet.create({
 
   card: { backgroundColor: Palette.surface, borderRadius: Radius.card, padding: 16, gap: 10, marginBottom: 18 },
   cardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  cardTitle: { fontFamily: Font.heading, fontSize: 17, color: Palette.text },
+  cardTitle: { fontFamily: Font.heading, fontSize: Type.headline, color: Palette.text },
   bar: { height: 8, borderRadius: 4, backgroundColor: Palette.control, overflow: 'hidden' },
   barFill: { height: 8, backgroundColor: Palette.accent },
-  caption: { fontFamily: Font.regular, fontSize: 12.5, color: Palette.textMuted },
-  mono: { fontFamily: Font.mono, fontSize: 11.5, color: Palette.textMuted },
+  caption: { fontFamily: Font.regular, fontSize: Type.caption, color: Palette.textMuted },
+  mono: { fontFamily: Font.mono, fontSize: Type.micro, color: Palette.textMuted },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: Palette.rail },
-  rowIcon: { width: 34, height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  rowName: { fontFamily: Font.medium, fontSize: 13.5, color: Palette.text },
+  rowIcon: { width: 34, height: 34, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
+  rowName: { fontFamily: Font.medium, fontSize: Type.callout, color: Palette.text },
   rowBar: { height: 3, borderRadius: 2, backgroundColor: Palette.control, overflow: 'hidden' },
   rowBarFill: { height: 3, backgroundColor: Palette.accent },
 
   actions: { gap: 10, paddingTop: 22 },
-  error: { fontFamily: Font.regular, fontSize: 13, color: Palette.danger, paddingTop: 12 },
-  note: { fontFamily: Font.regular, fontSize: 12, lineHeight: 18, color: Palette.textMuted, paddingTop: 20 },
+  error: { fontFamily: Font.regular, fontSize: Type.callout, color: Palette.danger, paddingTop: 12 },
+  note: { fontFamily: Font.regular, fontSize: Type.caption, lineHeight: 18, color: Palette.textMuted, paddingTop: 20 },
 });

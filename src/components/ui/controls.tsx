@@ -3,13 +3,13 @@ import {
   Pressable, ScrollView, StyleProp, StyleSheet, Text, TextInput, TextStyle, View, ViewStyle,
 } from 'react-native';
 import Animated, {
-  Easing, SharedValue, runOnJS, useAnimatedProps, useAnimatedStyle,
-  useSharedValue, withRepeat, withSpring, withTiming,
+  Easing, FadeIn, FadeOut, ReduceMotion, SharedValue, runOnJS, useAnimatedProps,
+  useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withSpring, withTiming,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Icon, type IconName } from '@/components/ui/icons';
-import { Palette, Radius, Font } from '@/constants/theme';
+import { Motion, Palette, Radius, Font, Type } from '@/constants/theme';
 import { hueFor, washColor } from '@/utils/albumColor';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -26,7 +26,7 @@ const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
  * fading rectangle.
  */
 export function Pressed({
-  children, onPress, onLongPress, style, scaleTo = 0.97, disabled, label, selected,
+  children, onPress, onLongPress, style, scaleTo = 0.97, disabled, label, selected, hitSlop,
 }: {
   children: ReactNode;
   onPress?: () => void;
@@ -37,6 +37,8 @@ export function Pressed({
   disabled?: boolean;
   label?: string;
   selected?: boolean;
+  /** For bare icon targets whose glyph is smaller than a 44pt touch area. */
+  hitSlop?: number;
 }) {
   const pressed = useSharedValue(0);
   const animated = useAnimatedStyle(() => ({
@@ -59,8 +61,9 @@ export function Pressed({
       // threshold where a real tap feels delayed, and long enough that a flick
       // never lights anything up.
       unstable_pressDelay={55}
-      onPressIn={() => { pressed.value = withTiming(1, { duration: 70, easing: Easing.out(Easing.quad) }); }}
-      onPressOut={() => { pressed.value = withSpring(0, { damping: 18, stiffness: 420, mass: 0.45 }); }}
+      hitSlop={hitSlop}
+      onPressIn={() => { pressed.value = withTiming(1, { duration: Motion.duration.press, easing: Easing.out(Easing.quad) }); }}
+      onPressOut={() => { pressed.value = withSpring(0, Motion.spring.press); }}
       style={[style, animated]}
     >
       {children}
@@ -114,7 +117,12 @@ export function ChipRow({ children }: { children: ReactNode }) {
 export function Fab({ size, playing, onPress }: { size: number; playing: boolean; onPress: () => void }) {
   const p = useSharedValue(playing ? 1 : 0);
   useEffect(() => {
-    p.value = withTiming(playing ? 1 : 0, { duration: 190, easing: Easing.out(Easing.cubic) });
+    // Opted back in under reduced motion: this cross-fade reports playback
+    // state, so losing it would leave the glyph mid-swap on the app's single
+    // most-tapped control.
+    p.value = withTiming(playing ? 1 : 0, {
+      duration: Motion.duration.glyph, easing: Easing.out(Easing.cubic), reduceMotion: ReduceMotion.Never,
+    });
   }, [playing]);
 
   const playStyle = useAnimatedStyle(() => ({
@@ -216,7 +224,7 @@ export function Scrubber({ fraction, onCommit, onScrubStart, knob = true, liveMs
     // anything happens makes it feel like the touch was ignored.
     .minDistance(0)
     .onBegin((e) => {
-      grabbed.value = withSpring(1, GRAB_SPRING);
+      grabbed.value = withSpring(1, Motion.spring.grab);
       if (onScrubStart) runOnJS(onScrubStart)(true);
       setFromX(e.x);
     })
@@ -229,14 +237,16 @@ export function Scrubber({ fraction, onCommit, onScrubStart, knob = true, liveMs
       runOnJS(onCommit)(fraction.value);
     })
     .onFinalize(() => {
-      grabbed.value = withSpring(0, GRAB_SPRING);
+      grabbed.value = withSpring(0, Motion.spring.grab);
       runOnJS(onCommit)(fraction.value);
       if (onScrubStart) runOnJS(onScrubStart)(false);
     });
 
+  // scaleY, never `height`: a height animation re-runs layout for the track on
+  // every frame of the grab spring. An 8px track scaled to 0.5 is pixel-identical
+  // to a 4px one and costs nothing but a composite.
   const trackStyle = useAnimatedStyle(() => ({
-    height: 4 + grabbed.value * 4,
-    borderRadius: 2 + grabbed.value * 2,
+    transform: [{ scaleY: 0.5 + grabbed.value * 0.5 }],
   }));
   // scaleX from the left edge, never `width`: a percentage width re-runs layout
   // for the track on every frame, which is exactly the judder this replaces.
@@ -263,8 +273,6 @@ export function Scrubber({ fraction, onCommit, onScrubStart, knob = true, liveMs
     </GestureDetector>
   );
 }
-
-const GRAB_SPRING = { damping: 20, stiffness: 300, mass: 0.5 };
 
 /** Translucent round icon button used on washed headers. */
 export function IconCircle({ name, onPress, color, background, size = 36, iconSize = 17, label }: {
@@ -370,6 +378,7 @@ export function Pulse({ size, radius, color = Palette.accent, active = true, dur
   active?: boolean;
   durationMs?: number;
 }) {
+  const reduced = useReducedMotion();
   const p = useSharedValue(0);
   useEffect(() => {
     if (!active) { p.value = 0; return; }
@@ -382,6 +391,11 @@ export function Pulse({ size, radius, color = Palette.accent, active = true, dur
     transform: [{ scale: 1 + p.value }],
     opacity: active ? 0.5 * (1 - Math.min(1, p.value / 0.7)) : 0,
   }));
+
+  // Decorative "this is live" ring. Under reduced motion the status dot it sits
+  // behind already says the same thing, so it simply doesn't render — a disabled
+  // repeat would otherwise strand the ring mid-travel.
+  if (reduced) return null;
 
   return (
     <Animated.View
@@ -413,12 +427,16 @@ const BAR_PHASES = [
 // bar, which is what made the meter judder next to a scrolling list. A bar of
 // fixed height scaled from its base is pure compositing.
 function Bar({ from, to, ms, color }: { from: number; to: number; ms: number; color: string }) {
+  const reduced = useReducedMotion();
   const scale = useSharedValue(from / BAR_H);
   useEffect(() => {
+    // Under reduced motion the three bars hold their opening heights: still a
+    // deliberately uneven meter that marks the playing row, with no movement.
+    if (reduced) return;
     scale.value = withRepeat(
       withTiming(to / BAR_H, { duration: ms, easing: Easing.inOut(Easing.ease) }), -1, true,
     );
-  }, []);
+  }, [reduced]);
   const style = useAnimatedStyle(() => ({ transform: [{ scaleY: scale.value }] }));
   return (
     <Animated.View
@@ -427,9 +445,132 @@ function Bar({ from, to, ms, color }: { from: number; to: number; ms: number; co
   );
 }
 
+/**
+ * Format mark for a browse row: `24/192` in mono, accent-tinted when the record
+ * is better than CD.
+ *
+ * Deliberately *not* a `SpecBadge`. A badge's filled ground would compete with
+ * the row's own press feedback, and a filled accent pill in every other row
+ * would break the one-accent-gesture-per-surface rule. This is a text mark, not
+ * a control — `accentHi` rather than `accent` keeps it quieter than anything
+ * tappable.
+ *
+ * Callers must render it only when it says something. A mark on every row is
+ * wallpaper; a mark on the good copies is a reason to pick one.
+ */
+export function FormatMark({ spec, hiRes }: { spec: string; hiRes: boolean }) {
+  return <Text style={[s.formatMark, hiRes && { color: Palette.accentHi }]}>{spec}</Text>;
+}
+
+function clockText(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const sec = Math.floor(seconds % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+/**
+ * The trailing slot on a track row: a level meter while this row is the one
+ * playing, the track's duration otherwise.
+ *
+ * The two cross-fade rather than swapping, inside a **fixed-width** box. Both
+ * parts matter. A hard swap on a row you are looking at when you press play
+ * reads as a glitch; and because a meter and a `3:45` are different widths,
+ * without the fixed box the row's title would jump sideways at the same moment.
+ * The two states are absolutely positioned so they can overlap mid-fade without
+ * pushing each other around.
+ */
+export function TrackTrailing({ playing, duration }: { playing: boolean; duration: number }) {
+  return (
+    <View style={s.trailing}>
+      {playing ? (
+        <Animated.View
+          key="bars"
+          style={s.trailingItem}
+          entering={FadeIn.duration(Motion.duration.fadeIn)}
+          exiting={FadeOut.duration(Motion.duration.fadeOut)}
+        >
+          <PlayingBars />
+        </Animated.View>
+      ) : (
+        <Animated.View
+          key="dur"
+          style={s.trailingItem}
+          entering={FadeIn.duration(Motion.duration.fadeIn)}
+          exiting={FadeOut.duration(Motion.duration.fadeOut)}
+        >
+          <Text style={s.trailingDur}>{clockText(duration)}</Text>
+        </Animated.View>
+      )}
+    </View>
+  );
+}
+
+/**
+ * A placeholder block that breathes, for content whose shape we know before its
+ * data arrives.
+ *
+ * This is the app's only loading affordance — there is no spinner, because the
+ * layout is always known ahead of the data and a centred spinner both throws
+ * that away and reads as Android. Deliberately low-contrast: on a #0A0A0A
+ * ground a 0.05–0.10 white range is plenty, and a skeleton that pulses hard
+ * reads as a broken image rather than as pending content.
+ */
+export function Skeleton({ width, height, radius = Radius.sm, style }: {
+  width: number | `${number}%`;
+  height: number;
+  radius?: number;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const reduced = useReducedMotion();
+  const p = useSharedValue(0);
+
+  useEffect(() => {
+    if (reduced) return;
+    p.value = withRepeat(
+      withTiming(1, { duration: 900, easing: Easing.inOut(Easing.quad) }), -1, true,
+    );
+  }, [reduced]);
+
+  // Under reduced motion this holds at the starting 0.05 and simply doesn't
+  // breathe. It must stay *visible* — with the animation gone the block is
+  // carrying the "something is coming" message on its own.
+  const animated = useAnimatedStyle(() => ({ opacity: 0.05 + p.value * 0.05 }));
+
+  return (
+    <Animated.View
+      style={[{ width, height, borderRadius: radius, backgroundColor: Palette.text }, animated, style]}
+    />
+  );
+}
+
+/** The shape of a track or album row, for a list that hasn't arrived yet. */
+export function SkeletonRow({ art = 48 }: { art?: number }) {
+  return (
+    <View style={s.skelRow}>
+      <Skeleton width={art} height={art} radius={Radius.sm} />
+      <View style={{ flex: 1, gap: 7 }}>
+        <Skeleton width="62%" height={13} radius={Radius.xs} />
+        <Skeleton width="40%" height={11} radius={Radius.xs} />
+      </View>
+      <Skeleton width={26} height={11} radius={Radius.xs} />
+    </View>
+  );
+}
+
+/** The shape of a Home shelf card. */
+export function SkeletonCard({ size = 142 }: { size?: number }) {
+  return (
+    <View style={{ width: size, gap: 8 }}>
+      <Skeleton width={size} height={size} radius={Radius.md} />
+      <Skeleton width={size * 0.8} height={12} radius={Radius.xs} />
+      <Skeleton width={size * 0.5} height={11} radius={Radius.xs} />
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
-  chip: { height: 34, paddingHorizontal: 15, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  chipText: { fontSize: 13 },
+  chip: { height: 34, paddingHorizontal: 15, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
+  chipText: { fontSize: Type.callout },
   chipScroll: { flexGrow: 0, flexShrink: 0 },
   chipRow: { gap: 8, paddingHorizontal: 20, paddingBottom: 6, alignItems: 'center' },
 
@@ -451,7 +592,7 @@ const s = StyleSheet.create({
   liveText: { padding: 0, margin: 0 },
 
   scrubHit: { height: 26, justifyContent: 'center' },
-  scrubTrack: { backgroundColor: 'rgba(255,255,255,0.22)', overflow: 'hidden' },
+  scrubTrack: { height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.22)', overflow: 'hidden' },
   scrubFill: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: '#fff',
@@ -470,19 +611,32 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
     paddingTop: 22, paddingBottom: 12,
   },
-  sectionTitle: { fontFamily: Font.heading, fontSize: 19, color: Palette.text },
-  sectionAction: { fontFamily: Font.medium, fontSize: 12, color: Palette.textMuted },
+  sectionTitle: { fontFamily: Font.heading, fontSize: Type.title3, color: Palette.text },
+  sectionAction: { fontFamily: Font.medium, fontSize: Type.caption, color: Palette.textMuted },
 
   overline: {
-    fontFamily: Font.bold, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase',
+    fontFamily: Font.bold, fontSize: Type.micro, letterSpacing: 1, textTransform: 'uppercase',
     color: Palette.textMuted,
   },
 
   badge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.sm },
-  badgeText: { fontFamily: Font.mono, fontSize: 11, fontWeight: '600' },
+  badgeText: { fontFamily: Font.mono, fontSize: Type.micro, fontWeight: '600' },
 
-  pill: { paddingVertical: 14, borderRadius: 26, alignItems: 'center' },
-  pillText: { fontFamily: Font.bold, fontSize: 14.5 },
+  pill: { paddingVertical: 14, borderRadius: Radius.pill, alignItems: 'center' },
+  pillText: { fontFamily: Font.bold, fontSize: Type.body },
 
   bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 13 },
+
+  // Wide enough for the longest duration a record realistically carries
+  // (`12:34`), so the meter and the clock never resize the row between them.
+  trailing: { width: 42, height: 16, alignItems: 'flex-end', justifyContent: 'center' },
+  trailingItem: { position: 'absolute', right: 0, alignItems: 'flex-end', justifyContent: 'center' },
+  trailingDur: { fontFamily: Font.mono, fontSize: Type.caption, color: Palette.textMuted },
+
+  // Mirrors the `row` geometry used by the Library and album track lists, so a
+  // skeleton list and the real list occupy the same space and nothing shifts
+  // when the data lands.
+  skelRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 },
+
+  formatMark: { fontFamily: Font.mono, fontSize: Type.micro, color: Palette.textMuted },
 });

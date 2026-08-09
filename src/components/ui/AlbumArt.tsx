@@ -1,9 +1,9 @@
 import { memo, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing } from 'react-native-reanimated';
+import Animated, { ReduceMotion, useAnimatedStyle, useSharedValue, withTiming, Easing } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Radius } from '@/constants/theme';
+import { Motion, Radius } from '@/constants/theme';
 import { hueFor, ringColor, tintColor, washColor } from '@/utils/albumColor';
 
 type Props = {
@@ -41,7 +41,11 @@ export const AlbumArt = memo(function AlbumArt({ uri, seedKey, size, radius = Ra
 
   useEffect(() => {
     if (loaded) {
-      opacity.value = withTiming(1, { duration: 260, easing: Easing.out(Easing.quad) });
+      // Opted back in: this is an opacity reveal, not movement, and without it
+      // late-arriving artwork pops in over the hue block.
+      opacity.value = withTiming(1, {
+        duration: Motion.duration.reveal, easing: Easing.out(Easing.quad), reduceMotion: ReduceMotion.Never,
+      });
     }
   }, [loaded]);
 

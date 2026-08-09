@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Icon } from '@/components/ui/icons';
-import { Palette, Font } from '@/constants/theme';
+import { Pressed } from '@/components/ui/controls';
+import { Palette, Font, Type } from '@/constants/theme';
 
 export function NavRow({ label, value, onPress, destructive, last, valueColor, mono }: {
   label: string;
@@ -17,18 +18,13 @@ export function NavRow({ label, value, onPress, destructive, last, valueColor, m
   // telemetry treatment throughout the design.
   const numeric = mono ?? (value !== undefined && /[0-9]/.test(value));
 
-  return (
-    <Pressable
-      style={({ pressed }) => [s.row, !last && s.divider, pressed && interactive && s.pressed]}
-      onPress={onPress}
-      disabled={!interactive}
-      accessibilityRole={interactive ? 'button' : undefined}
-    >
+  const body = (
+    <>
       <Text style={[s.label, destructive && s.destructiveLabel]} numberOfLines={1}>{label}</Text>
       <View style={s.right}>
         {value !== undefined && (
           <Text
-            style={[s.value, numeric && { fontFamily: Font.mono, fontSize: 13.5 }, valueColor ? { color: valueColor } : undefined]}
+            style={[s.value, numeric && { fontFamily: Font.mono, fontSize: Type.callout }, valueColor ? { color: valueColor } : undefined]}
             numberOfLines={1}
           >
             {value}
@@ -38,7 +34,19 @@ export function NavRow({ label, value, onPress, destructive, last, valueColor, m
           <Icon name="chevron-right" size={14} color={Palette.textMuted} />
         )}
       </View>
-    </Pressable>
+    </>
+  );
+
+  // A row with no `onPress` is a readout, not a control — it must not be
+  // announced as a button and must not react to touch.
+  if (!interactive) {
+    return <View style={[s.row, !last && s.divider]}>{body}</View>;
+  }
+
+  return (
+    <Pressed style={[s.row, !last && s.divider]} onPress={onPress} label={label}>
+      {body}
+    </Pressed>
   );
 }
 
@@ -52,9 +60,8 @@ const s = StyleSheet.create({
     gap: 12,
   },
   divider: { borderBottomWidth: 1, borderBottomColor: Palette.rail },
-  pressed: { opacity: 0.6 },
-  label: { flex: 1, color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 14.5 },
+  label: { flex: 1, color: Palette.textSecondary, fontFamily: Font.regular, fontSize: Type.body },
   destructiveLabel: { color: Palette.danger, fontFamily: Font.medium },
   right: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  value: { color: Palette.text, fontFamily: Font.medium, fontSize: 14.5, maxWidth: 190 },
+  value: { color: Palette.text, fontFamily: Font.medium, fontSize: Type.body, maxWidth: 190 },
 });

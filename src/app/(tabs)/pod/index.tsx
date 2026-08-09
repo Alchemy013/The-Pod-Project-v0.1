@@ -9,7 +9,7 @@ import { usePlayerStore } from '@/store/player.store';
 import { useArtStore } from '@/store/art.store';
 import { usePodInfoStore, EqPreset } from '@/store/pod.store';
 import { podService } from '@/services/bluetooth/BluetoothService';
-import { Palette, Font, Radius } from '@/constants/theme';
+import { Palette, Font, Radius, Type } from '@/constants/theme';
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { NavRow } from '@/components/ui/NavRow';
@@ -202,7 +202,7 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: Palette.bg },
 
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingBottom: 14 },
-  title: { flex: 1, fontFamily: Font.heading, fontSize: 22, color: Palette.text },
+  title: { flex: 1, fontFamily: Font.heading, fontSize: Type.title2, color: Palette.text },
 
   scroll: { paddingHorizontal: 20, paddingBottom: 150 },
 
@@ -217,19 +217,19 @@ const s = StyleSheet.create({
   },
   statusRing: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusName: { fontFamily: Font.heading, fontSize: 17, color: Palette.text },
+  statusName: { fontFamily: Font.heading, fontSize: Type.headline, color: Palette.text },
   statusLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   tinyDot: { width: 7, height: 7, borderRadius: 4 },
-  statusText: { fontFamily: Font.medium, fontSize: 13 },
+  statusText: { fontFamily: Font.medium, fontSize: Type.callout },
   signal: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 18 },
 
   telemetry: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4, paddingTop: 8 },
-  mono: { fontFamily: Font.mono, fontSize: 11.5, color: Palette.textMuted },
+  mono: { fontFamily: Font.mono, fontSize: Type.micro, color: Palette.textMuted },
 
   storageCard: { paddingVertical: 16, gap: 9 },
   storageBar: { height: 8, borderRadius: 4, backgroundColor: Palette.control, overflow: 'hidden' },
   storageFill: { height: 8, backgroundColor: Palette.accent },
-  storageText: { fontFamily: Font.regular, fontSize: 13, color: Palette.textSecondary },
+  storageText: { fontFamily: Font.regular, fontSize: Type.callout, color: Palette.textSecondary },
   transferRow: {
     flexDirection: 'row', alignItems: 'center', gap: 13, paddingTop: 12,
     borderTopWidth: 1, borderTopColor: Palette.rail, marginTop: 4,
@@ -238,7 +238,7 @@ const s = StyleSheet.create({
     width: 34, height: 34, borderRadius: Radius.sm, backgroundColor: Palette.accentWash,
     alignItems: 'center', justifyContent: 'center',
   },
-  transferLabel: { flex: 1, fontFamily: Font.medium, fontSize: 14.5, color: Palette.text },
+  transferLabel: { flex: 1, fontFamily: Font.medium, fontSize: Type.body, color: Palette.text },
 
   buttons: { gap: 10, paddingTop: 26 },
 });

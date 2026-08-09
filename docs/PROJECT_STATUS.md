@@ -555,15 +555,49 @@ straight because most layout questions answer themselves from them:
   `borderFaint` are kept as **aliases onto the elevation steps** purely so the
   older rule-based screens keep compiling — don't reach for them in new code.
 - `Radius`: `xs 5 · sm 7 · md 10 · lg 12 · card 16 · pill 999`. Real values
-  now; the "every radius is 0" rule is dead.
+  now; the "every radius is 0" rule is dead. **Rounded rectangles take a token;
+  circles and capsules do not** — where the radius is half the element's own
+  height (status dots, rings, avatars, progress bars, the scrubber track, the EQ
+  slider) it stays tied to the size, because forcing it onto the scale would
+  visibly break the shape. Counting distinct `borderRadius` literals therefore
+  overstates any drift; measure radius against height instead.
+- `Type`: **`display 40 · title1 28 · title2 22 · title3 19 · headline 15 ·
+  body 14 · callout 13 · caption 12 · micro 11`**. Nine steps, added 2026-08-10
+  to replace 24 hand-picked sizes — six of which were half-point (`14` *and*
+  `14.5`, both in quantity, with nothing saying which to reach for). Pick by
+  **role**, not by eye against the thing above it: that habit is what produced
+  the drift. A screen that seems to need a missing step almost always wants an
+  existing step in a different weight or colour. The only `fontSize` literal
+  left in `src/` is Onboarding's 74pt `P` mark, which is a graphic.
+  `ErrorBoundary` is **deliberately exempt** from every token — it must render
+  after something else has already failed, so it takes no imports it doesn't
+  need.
 - `Font`: **Spline Sans** — `regular` 400 / `medium` 500 / `bold` 600 /
   `heading` 700, plus `mono` (Menlo on iOS) for **every numeric or format
   readout**: durations, RSSI, MTU, `24/192`, MAC addresses. That mono/sans
   split is load-bearing in this design, not decoration.
 - `src/components/ui/controls.tsx` is the v2 kit: `Chip`/`ChipRow`, `Fab`,
   `IconCircle`, `HeaderWash`, `SectionTitle`, `Overline`, `SpecBadge`,
-  `PillButton`, `Pulse`, `PlayingBars`. Reach here before writing a new
-  primitive. The older `ui/Card`, `Row`, `NavRow`, `SectionHeader`, `Sheet`
+  `PillButton`, `Pulse`, `PlayingBars`, `TrackTrailing`, `FormatMark`,
+  `Skeleton`/`SkeletonRow`/`SkeletonCard`. Reach here before writing a new
+  primitive.
+  - **Loading is a `Skeleton` of the thing that's coming, never a spinner.** The
+    layout is always known before the data, and a centred `ActivityIndicator`
+    both throws that away and reads as Android (which the rules below forbid).
+    The single exception is the Wi-Fi scan in `pod/network.tsx`, where the result
+    has no known shape — 0 to 30 networks — so a skeleton would promise rows that
+    may never exist.
+  - `TrackTrailing` owns the level-meter ↔ duration swap on track rows: they
+    cross-fade inside a fixed-width box, so starting playback doesn't shove the
+    row's text sideways.
+  - `FormatMark` is the browse-row format tag (`24/192` in mono, `accentHi` when
+    hi-res). Deliberately **not** a `SpecBadge` — a filled pill in every other
+    row would break the one-accent-per-surface rule. Render it **only when it
+    says something**: a mark on every row is wallpaper.
+- **`src/utils/format.ts` is the single definition of "hi-res"** (`>16 bit` or
+  `>48 kHz`) and of the `24/192` spec string. It used to be written out inline in
+  three screens. Don't re-derive it. Checked by `src/utils/format.test.ts`
+  (`node src/utils/format.test.ts`). The older `ui/Card`, `Row`, `NavRow`, `SectionHeader`, `Sheet`
   survive and are still used by the `pod/*` settings screens.
 - `Pulse` (expanding, fading ring) is shared by `PairingScreen`, `pod/index`
   and `Onboarding` — it is absolutely positioned, so pass it the **same
@@ -597,7 +631,22 @@ straight because most layout questions answer themselves from them:
   size because a 3% dip that feels right on a row makes a 142px shelf card
   lurch. The dip is shallow (0.14 opacity) and gated behind
   `unstable_pressDelay={55}`, so touching a row on the way into a scroll never
-  lights it up. **Tab switches are an instant swap** — the acknowledgement is
+  lights it up. It takes an optional `hitSlop` for bare icon targets whose glyph
+  is smaller than a 44pt touch area. **"Single source" is now literally true:
+  every row and card in the app routes through it.** Until 2026-08-10 there was
+  a competing idiom — a bare `Pressable` with `pressed && { opacity: 0.6 }`,
+  i.e. a 0.4 dip applied instantly with no transition and no press delay — on
+  `NavRow`, the queue rows, the album track rows, the Wi-Fi scan rows and both
+  device pickers; and the Now Playing transport controls had no feedback at all.
+  All are converted. **Don't reintroduce a second press idiom** — if you catch
+  yourself writing `pressed && { opacity: … }`, use `Pressed`. Two deliberate
+  exceptions: a `NavRow` with no `onPress` is a **readout**, not a control, so it
+  renders a plain `View` (it must not be announced to VoiceOver as a button); and
+  bare icon/text targets with a `hitSlop` — the Library search-clear, the sort
+  toggle, the album header's shuffle — stay plain `Pressable`s, since they never
+  carried a `pressed` style and there is no idiom to unify. The check is one
+  line: `grep -rn "pressed && " src/` should stay empty. **Tab switches are an
+  instant swap** — the acknowledgement is
   the springing tab glyph. There *was* a cross-fade, via an `Animated.View`
   keyed on the active tab around `TabSlot`; the key change unmounted the whole
   tab stack on every switch, so lists and scroll position were rebuilt and
@@ -616,7 +665,24 @@ straight because most layout questions answer themselves from them:
     scales a fixed-height bar (`transformOrigin: 'bottom'`) instead of animating
     `height`; every progress fill in the app — `Scrubber`, `MiniPlayer` — is a
     full-width view with `transformOrigin: 'left'` driven by `scaleX`, **not** a
-    percentage `width`, which re-runs layout on every frame.
+    percentage `width`, which re-runs layout on every frame. The `Scrubber`'s
+    grab feedback obeys the same rule: the track is a **fixed 8px/radius 4** bar
+    scaled `scaleY: 0.5 → 1`, not an animated `height: 4 → 8`. At this size the
+    two are pixel-identical (an 8px rounded rect at `scaleY: 0.5` gives exactly
+    the 4×2 elliptical corners a 4px/radius-2 bar has), and the scaled one costs
+    a composite instead of ~400ms of layout passes per grab and per release.
+- **Reduced motion is honoured** (`ReducedMotionConfig mode={ReduceMotion.System}`
+  in `src/app/_layout.tsx`) — it governs every Reanimated animation in the app at
+  once. The doctrine is *fewer and gentler, not zero*: opacity changes that carry
+  information opt back **in** with `reduceMotion: ReduceMotion.Never`, currently
+  `AlbumArt`'s art reveal and `Fab`'s play/pause glyph cross-fade. Three places
+  need explicit handling because the global switch disables a `withRepeat` by
+  **jumping it to its final value**, which strands a loop mid-travel rather than
+  stopping it: `Pulse` renders `null` (the status dot behind it already says
+  "live"), `PlayingBars` holds its opening heights as a static uneven meter, and
+  `MiniPlayer` swaps `SlideInDown`/`SlideOutDown` for `FadeIn`/`FadeOut`. Note
+  `useReducedMotion()` reads the setting **at app start and does not re-render on
+  change** — testing it requires a full relaunch after toggling.
   - **A drag must never `setState`.** `Scrubber` writes a caller-owned shared
     value and `LiveText` renders the number by writing the `text` prop of a
     read-only `TextInput` through `useAnimatedProps` — so a scrub never enters
@@ -628,8 +694,11 @@ straight because most layout questions answer themselves from them:
 ### Known dead code (safe to delete, nothing imports it)
 
 `src/features/bluetooth/BluetoothProvider.tsx` (+ `useBluetooth`),
-`src/components/ui/EmptyState.tsx`, `Genre`/`Playlist` in `types/music.ts`,
+`Genre`/`Playlist` in `types/music.ts`,
 `player.setPosition`, `LockScreenService.teardownLockScreen`.
+(**`ui/EmptyState.tsx` is no longer dead** — it was rewritten to take an
+`IconName` instead of a string glyph, plus an optional action, and is now used
+by Home, both Library lists and the Queue.)
 `playPlaylist`/`PLAY_PLAYLIST` is wired end-to-end but has **no UI caller** —
 see the playlist note under Roadmap. (`Radius` is no longer dead — the v2
 design uses every value. The `@/global.css` import is gone.)
@@ -766,6 +835,25 @@ branch `fresh`.
   that killed the tab-switch remount, moved `PlayingBars` off layout animation,
   took the volume drag and the lyric sheet out of the screen's render path, and
   memoised `AlbumArt`
+- ✳ **Design pass (2026-08-10)**, from an audit that followed the motion work —
+  plans `004`–`008` in `docs/plans/`. A nine-step `Type` scale replacing 24
+  hand-picked font sizes; `Skeleton`/`SkeletonRow`/`SkeletonCard` replacing the
+  full-screen spinners; `EmptyState` rewritten and adopted (Home's empty state
+  now has an **Add music** button into Pod › Storage instead of prose); a single
+  `utils/format.ts` definition of hi-res, surfaced as a `FormatMark` on browse
+  rows; and the duplicate settings gear removed from the Home header. Verified by
+  `tsc --noEmit`, `expo export --platform ios` and both `utils/*.test.ts`
+  self-checks — **not on hardware**, and the type scale moved 12 of 24 sizes, so
+  its eye check is the real sign-off and is outstanding
+- ✳ **Second motion pass (2026-08-10)**, from an animation audit — plans and the
+  full reasoning are in `docs/plans/`. Three changes: **every** row and card in the
+  app now routes through `Pressed` (the five Now Playing transport controls had
+  no feedback at all; `NavRow`, the queue rows, album track rows, Wi-Fi scan rows
+  and both device pickers flashed `opacity: 0.6`); the `Scrubber`'s grab feedback
+  moved off animated `height` onto `scaleY`; and the app now honours the system
+  Reduce Motion setting. Verified by `tsc --noEmit` and a full `expo export
+  --platform ios` — **not on hardware**, so the per-plan feel checks are still
+  outstanding
 - ✳ PING/PONG handshake gating "connected", which fixes the first connect
   after pairing coming up with no data
 - ✳ Seamless BLE reconnection — `bluetooth-central` background mode, Core

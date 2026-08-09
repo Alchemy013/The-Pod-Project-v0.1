@@ -11,24 +11,12 @@ import { podService } from '@/services/bluetooth/BluetoothService';
 import { deleteTrack } from '@/services/transfer/UploadService';
 import { isPodReachable } from '@/services/transfer/WifiService';
 import { Song } from '@/types/music';
-import { Palette, Font, Radius } from '@/constants/theme';
+import { Palette, Font, Radius, Type } from '@/constants/theme';
 import { AlbumArt } from '@/components/ui/AlbumArt';
-import { Fab, HeaderWash, IconCircle, PlayingBars, SpecBadge } from '@/components/ui/controls';
+import { Fab, FormatMark, HeaderWash, IconCircle, Pressed, SpecBadge, TrackTrailing } from '@/components/ui/controls';
+import { isHiResAlbum, isHiResSong, specOf } from '@/utils/format';
 
 const HERO = 204;
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-/** `24/96` style readout — the hi-fi shorthand used across the design. */
-function specOf(song: Song | undefined): string | null {
-  if (!song?.bitDepth || !song?.sampleRate) return null;
-  const khz = song.sampleRate / 1000;
-  return `${song.bitDepth}/${Number.isInteger(khz) ? khz : khz.toFixed(1)}`;
-}
 
 export default function AlbumScreen() {
   // headerShown:false on this Stack, so reserve the status bar ourselves.
@@ -54,8 +42,8 @@ export default function AlbumScreen() {
 
   const minutes = Math.round(album.duration / 60);
   const first = album.songs[0];
-  const spec = specOf(first);
-  const hiRes = album.songs.some((sg) => sg.bitDepth > 16 || sg.sampleRate > 48000);
+  const spec = first ? specOf(first) : null;
+  const hiRes = isHiResAlbum(album);
 
   const handlePlay = () => { playAlbum(album.id); router.push('/playing'); };
   const handleShuffle = () => {
@@ -148,22 +136,26 @@ export default function AlbumScreen() {
           const active = nowPlaying?.id === item.id;
           const trackSpec = specOf(item);
           return (
-            <Pressable
-              style={({ pressed }) => [s.row, pressed && { opacity: 0.6 }]}
+            <Pressed
+              style={s.row}
+              label={item.title}
               onPress={() => { playSong(item.path); router.push('/playing'); }}
               onLongPress={() => trackMenu(item)}
             >
               <Text style={[s.num, active && { color: Palette.accent }]}>{item.trackNumber || index + 1}</Text>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={[s.rowTitle, active && { color: Palette.accent }]} numberOfLines={1}>{item.title}</Text>
-                <Text style={s.rowSub} numberOfLines={1}>
-                  {[item.format?.toUpperCase(), trackSpec].filter(Boolean).join(' · ') || item.artist}
-                </Text>
+                <View style={s.rowSubLine}>
+                  <Text style={s.rowSub} numberOfLines={1}>
+                    {item.format?.toUpperCase() || item.artist}
+                  </Text>
+                  {/* The spec was plain muted text here, visually identical to
+                      the artist name. It tints when the track beats CD. */}
+                  {!!trackSpec && <FormatMark spec={trackSpec} hiRes={isHiResSong(item)} />}
+                </View>
               </View>
-              {active && playbackState === 'playing'
-                ? <PlayingBars />
-                : <Text style={s.dur}>{formatTime(item.duration)}</Text>}
-            </Pressable>
+              <TrackTrailing playing={active && playbackState === 'playing'} duration={item.duration} />
+            </Pressed>
           );
         }}
       />
@@ -179,18 +171,18 @@ const s = StyleSheet.create({
 
   hero: { alignItems: 'center', gap: 6, paddingTop: 6 },
   title: {
-    fontFamily: Font.heading, fontSize: 26, lineHeight: 30, color: Palette.text,
+    fontFamily: Font.heading, fontSize: Type.title1, lineHeight: 30, color: Palette.text,
     textAlign: 'center', marginTop: 10,
   },
-  artist: { fontFamily: Font.medium, fontSize: 14, color: Palette.text, opacity: 0.85 },
-  meta: { fontFamily: Font.mono, fontSize: 11.5, color: 'rgba(255,255,255,0.55)' },
+  artist: { fontFamily: Font.medium, fontSize: Type.body, color: Palette.text, opacity: 0.85 },
+  meta: { fontFamily: Font.mono, fontSize: Type.micro, color: 'rgba(255,255,255,0.55)' },
 
   actions: { flexDirection: 'row', alignItems: 'center', gap: 20, paddingTop: 20, paddingBottom: 10 },
   badges: { flexDirection: 'row', gap: 7, paddingBottom: 8 },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 9 },
-  num: { width: 18, textAlign: 'right', fontFamily: Font.mono, fontSize: 13, color: Palette.textMuted },
-  rowTitle: { fontFamily: Font.medium, fontSize: 15, color: Palette.text },
-  rowSub: { fontFamily: Font.regular, fontSize: 12.5, color: Palette.textSecondary, marginTop: 2 },
-  dur: { fontFamily: Font.mono, fontSize: 12, color: Palette.textMuted },
+  num: { width: 18, textAlign: 'right', fontFamily: Font.mono, fontSize: Type.callout, color: Palette.textMuted },
+  rowTitle: { fontFamily: Font.medium, fontSize: Type.headline, color: Palette.text },
+  rowSubLine: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 2 },
+  rowSub: { flexShrink: 1, fontFamily: Font.regular, fontSize: Type.caption, color: Palette.textSecondary },
 });

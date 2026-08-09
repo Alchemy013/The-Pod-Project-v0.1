@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHistoryStore, PlayEntry } from '@/store/history.store';
 import { useLibraryStore } from '@/store/library.store';
 import { useArt } from '@/store/art.store';
-import { Palette, Font, Radius } from '@/constants/theme';
+import { Palette, Font, Radius, Type } from '@/constants/theme';
 import { AlbumArt } from '@/components/ui/AlbumArt';
 import { IconCircle, Overline } from '@/components/ui/controls';
 
@@ -129,27 +129,27 @@ export default function HistoryScreen() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: Palette.bg },
   nav: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 12, gap: 10 },
-  navTitle: { flex: 1, textAlign: 'center', fontFamily: Font.bold, fontSize: 15, color: Palette.text },
+  navTitle: { flex: 1, textAlign: 'center', fontFamily: Font.bold, fontSize: Type.headline, color: Palette.text },
 
   list: { paddingHorizontal: 20, paddingBottom: 150 },
 
   sectionLabel: { backgroundColor: Palette.bg, paddingTop: 20, paddingBottom: 8 },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 9 },
-  time: { width: 44, fontFamily: Font.mono, fontSize: 11, color: Palette.textMuted },
-  rowTitle: { fontFamily: Font.medium, fontSize: 14.5, color: Palette.text },
-  rowSub: { fontFamily: Font.regular, fontSize: 12.5, color: Palette.textSecondary, marginTop: 1 },
+  time: { width: 44, fontFamily: Font.mono, fontSize: Type.micro, color: Palette.textMuted },
+  rowTitle: { fontFamily: Font.medium, fontSize: Type.body, color: Palette.text },
+  rowSub: { fontFamily: Font.regular, fontSize: Type.caption, color: Palette.textSecondary, marginTop: 1 },
 
   statsBlock: {
     marginTop: 24, padding: 18, borderRadius: Radius.card, backgroundColor: Palette.surface, gap: 14,
   },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   statCell: { width: '50%', marginBottom: 16 },
-  statValue: { fontFamily: Font.heading, fontSize: 28, fontVariant: ['tabular-nums'] },
-  statCaption: { fontFamily: Font.regular, fontSize: 12, color: Palette.textSecondary, marginTop: 3 },
+  statValue: { fontFamily: Font.heading, fontSize: Type.title1, fontVariant: ['tabular-nums'] },
+  statCaption: { fontFamily: Font.regular, fontSize: Type.caption, color: Palette.textSecondary, marginTop: 3 },
 
   empty: {
-    color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 14, lineHeight: 21,
+    color: Palette.textSecondary, fontFamily: Font.regular, fontSize: Type.body, lineHeight: 21,
     textAlign: 'center', paddingTop: 70, paddingHorizontal: 30,
   },
 });

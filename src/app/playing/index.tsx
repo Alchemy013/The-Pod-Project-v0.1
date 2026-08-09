@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing, FadeIn, FadeOut, runOnJS, useAnimatedStyle, useSharedValue,
   withSpring, withTiming,
@@ -12,15 +12,21 @@ import { Icon } from '@/components/ui/icons';
 import { usePlayerStore } from '@/store/player.store';
 import { useArtStore, useArt } from '@/store/art.store';
 import { fetchLyrics, LyricLine } from '@/services/lyrics/LyricsService';
-import { Palette, Font, Radius } from '@/constants/theme';
+import { Motion, Palette, Font, Radius, Type } from '@/constants/theme';
 import { AlbumArt } from '@/components/ui/AlbumArt';
-import { Fab, IconCircle, LiveText, Scrubber, SpecBadge } from '@/components/ui/controls';
+import { Fab, IconCircle, LiveText, Pressed, Scrubber, SpecBadge } from '@/components/ui/controls';
 import { hueFor, washColor } from '@/utils/albumColor';
+import { isHiResSong, specOf } from '@/utils/format';
 
 type LyricsState = 'idle' | 'loading' | 'found' | 'not_found' | 'error';
 
 const LINE_H = 52;
 const DIM = 'rgba(255,255,255,0.62)';
+
+/** Travel that commits a track change on its own, in points. */
+const SWIPE_PX = 70;
+/** …or this speed, in points per second, at any travel. */
+const SWIPE_VELOCITY = 110;
 
 /** Worklet: the seek labels are written from the UI thread during a drag. */
 function clock(seconds: number): string {
@@ -102,12 +108,17 @@ export default function NowPlayingScreen() {
     // Half-travel: the art follows the finger but lags it, which is what makes
     // the card feel weighted rather than stuck to the touch.
     .onUpdate((e) => { artX.value = e.translationX * 0.5; })
+    // Distance *or* velocity. Travel alone meant a fast flick that covered 60px
+    // did nothing at all, which reads as the gesture being ignored rather than
+    // as not having gone far enough. 110 px/s is the point above which a drag is
+    // unambiguously a throw; the gesture has already cleared `activeOffsetX`, so
+    // velocity can stand on its own without a second travel guard.
     .onEnd((e) => {
-      if (e.translationX < -70) runOnJS(next)();
-      else if (e.translationX > 70) runOnJS(previous)();
+      if (e.translationX < -SWIPE_PX || e.velocityX < -SWIPE_VELOCITY) runOnJS(next)();
+      else if (e.translationX > SWIPE_PX || e.velocityX > SWIPE_VELOCITY) runOnJS(previous)();
     })
     .onFinalize(() => {
-      artX.value = withSpring(0, { damping: 17, stiffness: 210, mass: 0.6 });
+      artX.value = withSpring(0, Motion.spring.swipe);
     });
 
   useEffect(() => { refresh(); }, []);
@@ -134,9 +145,7 @@ export default function NowPlayingScreen() {
   // Spring, not timing: the record settling back to full size wants a little
   // overshoot, the same as lifting the needle off and dropping it back on.
   useEffect(() => {
-    artScale.value = withSpring(playbackState === 'playing' ? 1 : 0.93, {
-      damping: 16, stiffness: 140, mass: 0.9,
-    });
+    artScale.value = withSpring(playbackState === 'playing' ? 1 : 0.93, Motion.spring.settle);
   }, [playbackState]);
 
   // The bar glides between ticks instead of stepping once a second: BLE only
@@ -148,7 +157,7 @@ export default function NowPlayingScreen() {
     const delta = Math.abs(target - seekFrac.value) * duration;
     seekFrac.value = delta > 2 || playbackState !== 'playing'
       ? target
-      : withTiming(target, { duration: 1000, easing: Easing.linear });
+      : withTiming(target, { duration: Motion.duration.tick, easing: Easing.linear });
   }, [displayPosition, duration, playbackState]);
 
   useEffect(() => { if (!volScrubbing.current) volFrac.value = volume / 100; }, [volume]);
@@ -170,9 +179,8 @@ export default function NowPlayingScreen() {
   const isPlaying = playbackState === 'playing';
   const seed = song?.albumId || song?.album || song?.title || 'thepod';
   const hue = hueFor(seed);
-  const khz = song?.sampleRate ? song.sampleRate / 1000 : 0;
-  const spec = song?.bitDepth && khz ? `${song.bitDepth}/${Number.isInteger(khz) ? khz : khz.toFixed(1)}` : null;
-  const hiRes = !!song && (song.bitDepth > 16 || song.sampleRate > 48000);
+  const spec = song ? specOf(song) : null;
+  const hiRes = !!song && isHiResSong(song);
 
   return (
     <LinearGradient
@@ -206,8 +214,8 @@ export default function NowPlayingScreen() {
             <Animated.View
               key="lyrics"
               style={s.fill}
-              entering={FadeIn.duration(240)}
-              exiting={FadeOut.duration(200)}
+              entering={FadeIn.duration(Motion.duration.fadeIn)}
+              exiting={FadeOut.duration(Motion.duration.fadeOut)}
             >
               {lyricsState === 'found' ? (
                 <Lyrics lines={lyrics} activeIdx={activeLyricIdx} />
@@ -219,7 +227,7 @@ export default function NowPlayingScreen() {
                       : 'Couldn’t load lyrics'}
                   </Text>
                   {lyricsState === 'error' && (
-                    <Text style={[s.lyricsMeta, { fontSize: 12, marginTop: 6 }]}>
+                    <Text style={[s.lyricsMeta, { fontSize: Type.caption, marginTop: 6 }]}>
                       Lyrics come from the internet — the Pod’s Wi-Fi has none, so turn cellular data on.
                     </Text>
                   )}
@@ -231,8 +239,8 @@ export default function NowPlayingScreen() {
               <Animated.View
                 key="art"
                 style={artStyle}
-                entering={FadeIn.duration(240)}
-                exiting={FadeOut.duration(200)}
+                entering={FadeIn.duration(Motion.duration.fadeIn)}
+                exiting={FadeOut.duration(Motion.duration.fadeOut)}
               >
                 <AlbumArt uri={artUri} seedKey={seed} size={artBox} radius={Radius.md} elevated />
               </Animated.View>
@@ -247,14 +255,14 @@ export default function NowPlayingScreen() {
           <Text style={s.artist} numberOfLines={1}>{song?.artist ?? '—'}</Text>
         </View>
         {lyricsState !== 'idle' && (
-          <Pressable
+          <Pressed
             onPress={() => setShowLyrics((v) => !v)}
             hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel={showLyrics ? 'Hide lyrics' : 'Show lyrics'}
+            scaleTo={0.86}
+            label={showLyrics ? 'Hide lyrics' : 'Show lyrics'}
           >
             <Icon name="quote" size={21} color={showLyrics ? Palette.accent : DIM} />
-          </Pressable>
+          </Pressed>
         )}
       </View>
 
@@ -279,19 +287,19 @@ export default function NowPlayingScreen() {
         </View>
 
         <View style={s.transport}>
-          <Pressable style={s.tb} onPress={toggleShuffle} accessibilityRole="button" accessibilityLabel="Shuffle">
+          <Pressed style={s.tb} onPress={toggleShuffle} scaleTo={0.86} label="Shuffle">
             <Icon name="shuffle" size={20} color={shuffle ? Palette.accent : DIM} />
-          </Pressable>
-          <Pressable style={s.tb} onPress={previous} accessibilityRole="button" accessibilityLabel="Previous track">
+          </Pressed>
+          <Pressed style={s.tb} onPress={previous} scaleTo={0.86} label="Previous track">
             <Icon name="previous" size={24} color={Palette.text} />
-          </Pressable>
+          </Pressed>
           <Fab size={68} playing={isPlaying} onPress={isPlaying ? pause : play} />
-          <Pressable style={s.tb} onPress={next} accessibilityRole="button" accessibilityLabel="Next track">
+          <Pressed style={s.tb} onPress={next} scaleTo={0.86} label="Next track">
             <Icon name="next" size={24} color={Palette.text} />
-          </Pressable>
-          <Pressable style={s.tb} onPress={cycleRepeat} accessibilityRole="button" accessibilityLabel={`Repeat: ${repeat}`}>
+          </Pressed>
+          <Pressed style={s.tb} onPress={cycleRepeat} scaleTo={0.86} label={`Repeat: ${repeat}`}>
             <Icon name={repeat === 'one' ? 'repeat-one' : 'repeat'} size={20} color={repeat !== 'off' ? Palette.accent : DIM} />
-          </Pressable>
+          </Pressed>
         </View>
 
         <View style={s.volumeRow}>
@@ -328,34 +336,38 @@ const s = StyleSheet.create({
   nav: { flexDirection: 'row', alignItems: 'center', paddingBottom: 14 },
   navLabel: { flex: 1, alignItems: 'center', gap: 2 },
   navOverline: {
-    fontFamily: Font.bold, fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase',
+    fontFamily: Font.bold, fontSize: Type.micro, letterSpacing: 1, textTransform: 'uppercase',
     color: 'rgba(255,255,255,0.6)',
   },
-  navAlbum: { fontFamily: Font.bold, fontSize: 12.5, color: Palette.text },
+  navAlbum: { fontFamily: Font.bold, fontSize: Type.caption, color: Palette.text },
 
   artArea: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12 },
   fill: { flex: 1, alignSelf: 'stretch' },
 
   lyricsScroll: { flex: 1, alignSelf: 'stretch' },
   lyricsBox: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
-  lyricsMeta: { color: DIM, fontFamily: Font.regular, fontSize: 14, textAlign: 'center' },
-  lyricLine: { color: DIM, fontFamily: Font.medium, fontSize: 18, textAlign: 'center', lineHeight: LINE_H },
-  lyricLineActive: { color: Palette.text, fontFamily: Font.heading, fontSize: 20 },
+  lyricsMeta: { color: DIM, fontFamily: Font.regular, fontSize: Type.body, textAlign: 'center' },
+  // These two are a *pair*: the whole job of the active line is that it is
+  // bigger than the rest, so they must not collapse onto the same step. 18/20
+  // both mapped to `title3`; the inactive line drops to `headline` to keep the
+  // gap. Their spacing is `LINE_H`, which the auto-scroll depends on.
+  lyricLine: { color: DIM, fontFamily: Font.medium, fontSize: Type.headline, textAlign: 'center', lineHeight: LINE_H },
+  lyricLineActive: { color: Palette.text, fontFamily: Font.heading, fontSize: Type.title3 },
 
   meta: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingTop: 18, paddingBottom: 14 },
-  title: { fontFamily: Font.heading, fontSize: 25, color: Palette.text },
-  artist: { fontFamily: Font.regular, fontSize: 15, color: DIM, marginTop: 4 },
+  title: { fontFamily: Font.heading, fontSize: Type.title1, color: Palette.text },
+  artist: { fontFamily: Font.regular, fontSize: Type.headline, color: DIM, marginTop: 4 },
 
   body: { paddingBottom: 22 },
 
   seekLabels: { flexDirection: 'row', justifyContent: 'space-between' },
-  seekTime: { fontFamily: Font.mono, fontSize: 11.5, color: DIM, width: 70 },
+  seekTime: { fontFamily: Font.mono, fontSize: Type.micro, color: DIM, width: 70 },
 
   transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },
   tb: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
 
   volumeRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingBottom: 14 },
-  volValue: { fontFamily: Font.mono, fontSize: 11, color: 'rgba(255,255,255,0.5)', width: 24, textAlign: 'right' },
+  volValue: { fontFamily: Font.mono, fontSize: Type.micro, color: 'rgba(255,255,255,0.5)', width: 24, textAlign: 'right' },
 
   specs: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'center' },
 });

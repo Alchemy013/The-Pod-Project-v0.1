@@ -1,12 +1,13 @@
 import { useEffect } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, View } from 'react-native';
 import { Device } from 'react-native-ble-plx';
 import { Icon } from '@/components/ui/icons';
 import { useBluetoothStore } from '@/store/bluetooth.store';
 import { POD_DEVICE_NAME } from '@/services/bluetooth/protocol';
-import { Palette, Font, Radius } from '@/constants/theme';
+import { Palette, Font, Radius, Type } from '@/constants/theme';
 import { Sheet } from '@/components/ui/Sheet';
 import { SectionHeader } from '@/components/ui/SectionHeader';
+import { Pressed } from '@/components/ui/controls';
 
 type RowState = 'connected' | 'connecting' | 'none';
 
@@ -19,8 +20,10 @@ function DeviceRow({ device, state, onPress }: {
   const isPod = name === POD_DEVICE_NAME;
 
   return (
-    <Pressable
-      style={({ pressed }) => [s.row, pressed && s.pressed]}
+    <Pressed
+      style={s.row}
+      label={name}
+      selected={state === 'connected'}
       onPress={onPress}
       disabled={state === 'connecting'}
     >
@@ -39,7 +42,7 @@ function DeviceRow({ device, state, onPress }: {
         <Icon name="check" size={18} color={Palette.accent} />
       )}
       {state === 'connecting' && <ActivityIndicator size="small" color={Palette.textSecondary} />}
-    </Pressable>
+    </Pressed>
   );
 }
 
@@ -110,8 +113,8 @@ export function BluetoothSheet({ visible, onClose }: { visible: boolean; onClose
 
 const s = StyleSheet.create({
   subtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, marginBottom: 14 },
-  subtitle: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 13 },
-  error: { color: Palette.danger, fontFamily: Font.regular, fontSize: 13, paddingHorizontal: 20, marginBottom: 10 },
+  subtitle: { color: Palette.textSecondary, fontFamily: Font.regular, fontSize: Type.callout },
+  error: { color: Palette.danger, fontFamily: Font.regular, fontSize: Type.callout, paddingHorizontal: 20, marginBottom: 10 },
 
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
@@ -119,7 +122,6 @@ const s = StyleSheet.create({
     backgroundColor: Palette.surface, borderRadius: Radius.lg,
     borderWidth: 1, borderColor: Palette.rail,
   },
-  pressed: { opacity: 0.6 },
   icon: {
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: Palette.control, alignItems: 'center', justifyContent: 'center',
@@ -127,11 +129,11 @@ const s = StyleSheet.create({
   iconRing: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   iconDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Palette.accent },
   info: { flex: 1, gap: 3 },
-  name: { color: Palette.text, fontFamily: Font.medium, fontSize: 15 },
+  name: { color: Palette.text, fontFamily: Font.medium, fontSize: Type.headline },
   namePod: { fontFamily: Font.heading },
-  status: { color: Palette.textMuted, fontFamily: Font.mono, fontSize: 11 },
+  status: { color: Palette.textMuted, fontFamily: Font.mono, fontSize: Type.micro },
   empty: {
-    color: Palette.textSecondary, fontFamily: Font.regular, fontSize: 14,
+    color: Palette.textSecondary, fontFamily: Font.regular, fontSize: Type.body,
     textAlign: 'center', paddingHorizontal: 30, paddingTop: 40,
   },
 });

@@ -1,7 +1,7 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { podService } from '@/services/bluetooth/BluetoothService';
 import { usePodInfoStore, EqPreset } from '@/store/pod.store';
-import { Palette, Font, Radius } from '@/constants/theme';
+import { Palette, Font, Radius, Type } from '@/constants/theme';
 import { Card } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { NavRow } from '@/components/ui/NavRow';
@@ -103,7 +103,7 @@ const s = StyleSheet.create({
     backgroundColor: Palette.surface, borderRadius: Radius.card,
   },
   band: { flex: 1, alignItems: 'center', gap: 8 },
-  bandValue: { fontFamily: Font.mono, fontSize: 10, color: Palette.accent },
+  bandValue: { fontFamily: Font.mono, fontSize: Type.micro, color: Palette.accent },
   track: {
     width: 18, height: TRACK_H, borderRadius: 9, backgroundColor: '#0E0E10',
     borderWidth: 1, borderColor: Palette.rail, overflow: 'hidden',
@@ -114,14 +114,14 @@ const s = StyleSheet.create({
     position: 'absolute', left: 2, right: 2, height: 10, borderRadius: 5,
     backgroundColor: Palette.accent,
   },
-  bandLabel: { fontFamily: Font.mono, fontSize: 9.5, color: Palette.textSecondary },
+  bandLabel: { fontFamily: Font.mono, fontSize: Type.micro, color: Palette.textSecondary },
 
   activeNote: {
-    fontFamily: Font.regular, fontSize: 13, color: Palette.textSecondary,
+    fontFamily: Font.regular, fontSize: Type.callout, color: Palette.textSecondary,
     paddingHorizontal: 20, paddingTop: 14,
   },
   note: {
-    fontFamily: Font.regular, fontSize: 12, lineHeight: 18, color: Palette.textMuted,
+    fontFamily: Font.regular, fontSize: Type.caption, lineHeight: 18, color: Palette.textMuted,
     paddingHorizontal: 20, paddingTop: 18,
   },
 });
