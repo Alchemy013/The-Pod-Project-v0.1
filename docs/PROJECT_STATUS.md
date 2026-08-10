@@ -1228,6 +1228,26 @@ fallback registering unattended at boot.
   `RequestDefaultAgent`, not before. It now does. Verified by
   `busctl get-property … Adapter1 Pairable` → `b false`, and by `bondable`
   disappearing from `btmgmt info` current settings.
+- **Pod still took ~24s to connect once boot was fast** → the remaining time was
+  **not** on the Pi at all: advertising landed at 13.7s but the phone's first
+  `StartNotify` arrived at 21.5s, a **7.7s discovery gap**. Cause: the kernel
+  advertises at its default **1280 ms** interval
+  (`/sys/kernel/debug/bluetooth/hci0/adv_{min,max}_interval` = 2048, in 0.625 ms
+  units — confirmed in `btmon` as `Min/Max advertising interval: 1280.000 msec`).
+  iOS scans on a duty cycle, so at one advertisement per 1.28 s it takes many
+  seconds to catch one. `gatt_server._set_adv_interval` now writes **160
+  (100 ms)** — an interval from Apple's Accessory Design Guidelines — just
+  before `Add Advertising`, which is when the kernel issues
+  `LE Set Advertising Parameters`. **debugfs does not survive a reboot**, which
+  is why this is firmware rather than a hand-tuned value; verified by resetting
+  it to 2048, rebooting, and watching the firmware set it back. Note this only
+  covers the legacy MGMT path — if the D-Bus advertisement ever registers,
+  bluetoothd takes the interval from `main.conf` (`[LE]`, line ~195, documented
+  there as "used for legacy advertisement interface only") instead.
+  ⚠️ **Time-to-connect is two numbers, and the Pi only owns one.** Before
+  optimising the Pi again, check the advertise→`StartNotify` gap in
+  `journalctl -u thepod -b -o short-monotonic`; if that gap is the big one, no
+  amount of boot work will help.
 - **Pod took ~30s to appear in the app, after the boot work supposedly fixed
   boot** → `MPDController.__init__` called `_connect()` eagerly, and `main()` is
   sequential, so the GATT server and advertising sat behind it. Harmless while

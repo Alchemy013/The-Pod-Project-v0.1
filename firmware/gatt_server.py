@@ -100,6 +100,32 @@ def _mgmt_request(sock, opcode, hci_index, params, what):
         return
 
 
+# 0.625 ms units, so 160 = 100 ms — one of the intervals in Apple's Accessory
+# Design Guidelines. The kernel default is 2048 = 1280 ms, which is sensible for
+# a background beacon and far too slow for something a phone is actively waiting
+# on: iOS scans on a duty cycle, so at one advertisement per 1.28 s discovery ate
+# ~7.7 s of the time-to-connect (measured: advertise at 13.7 s, phone's first
+# StartNotify at 21.5 s). Written on every start because debugfs does not survive
+# a reboot. Only affects the legacy MGMT path below; if the D-Bus advertisement
+# ever starts registering, bluetoothd picks the interval from main.conf instead.
+ADV_INTERVAL_UNITS = 160
+
+
+def _set_adv_interval(hci_index, units=ADV_INTERVAL_UNITS):
+    """Speed up advertising so iOS finds the Pod in ~1s instead of ~8s."""
+    for which in ('min', 'max'):
+        path = f'/sys/kernel/debug/bluetooth/hci{hci_index}/adv_{which}_interval'
+        try:
+            with open(path, 'w') as f:
+                f.write(str(units))
+        except Exception as e:
+            # Not fatal — a slow advertisement still works, it just takes longer
+            # to find. Don't let this stop the Pod coming up.
+            print(f'[ADV] Could not set adv_{which}_interval: {e}')
+            return
+    print(f'[ADV] Advertising interval {units * 0.625:.0f}ms')
+
+
 def _advertise_via_mgmt(hci_index):
     """Register a connectable advertisement over the legacy MGMT opcode."""
     global _mgmt_sock
@@ -148,6 +174,9 @@ def _advertise_via_mgmt(hci_index):
                       'Set Advertising(off)')
         _mgmt_request(sock, MGMT_OP_SET_CONNECTABLE, hci_index, b'\x01',
                       'Set Connectable')
+        # Before Add Advertising: the kernel reads these when it issues
+        # LE Set Advertising Parameters, which happens as the instance is added.
+        _set_adv_interval(hci_index)
         _mgmt_request(sock, MGMT_OP_ADD_ADVERTISING, hci_index, params,
                       'Add Advertising')
     except Exception:
