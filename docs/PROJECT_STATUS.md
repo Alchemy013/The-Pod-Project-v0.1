@@ -1348,6 +1348,13 @@ scope) WiFi management, playlists, EQ, search, history, queue editing.
 Not built yet: queue reordering (the drag-handle icon in `playing/queue.tsx` is
 decorative), firmware OTA updates.
 
+**Won't build: the iPhone's hardware volume buttons driving the Pod.** They
+control the phone's own audio session (the silent track that owns the lock
+screen) and nothing forwards that to the Pod, so wiring it means a native
+module observing `AVAudioSession.outputVolume` via KVO → `SET_VOLUME`, plus a
+`prebuild` and a full native rebuild. Explicitly declined 2026-08-11 as not
+needed — the Now Playing volume `Scrubber` is the control. Don't re-propose it.
+
 **Playlist UI — the one v2 screen with no implementation.** The design has a
 full playlist screen and Home shelf, and `PLAY_PLAYLIST` already works
 end-to-end. What's missing is the read side: there is **no firmware command to
