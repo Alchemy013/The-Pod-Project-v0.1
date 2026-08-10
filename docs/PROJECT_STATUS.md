@@ -21,13 +21,10 @@ Spline Sans, rounded surfaces, colour wash, four tabs Home/Search/Library/Pod.
 Anything below that says Archivo, zero-radius, or "rules instead of cards" has
 been corrected; if you find a leftover, it's a doc bug, trust `theme.ts`.
 
-⚠️ **`ThePod_Project_Specification_v0.1.pdf` (in the design bundle) describes a
-different, future device**: Prototype 2 on an **ESP32-S3**, and it states the
-Raspberry Pi platform "is not carried forward in any form". Everything in this
-repo — firmware, MPD, BLE protocol — is Prototype 1, which that spec marks
-complete. Don't treat the PDF as a description of this codebase; its §8 BLE
-protocol is a *proposal* that does not match `protocol.ts`, and its §9.1 still
-says NativeWind, which was removed in `a437a6a`.
+⚠️ **`ThePod_Project_Specification_v0.1.pdf` (in the design bundle) does not
+describe this codebase.** Its §8 BLE protocol is a *proposal* that does not
+match `protocol.ts`, and its §9.1 still says NativeWind, which was removed in
+`a437a6a`. Where the PDF and this repo disagree, the repo is right.
 
 ## What this is
 
@@ -1227,7 +1224,80 @@ fallback registering unattended at boot.
 - **`sudo btmgmt advertising on` in `setup_eq.sh`** → deleted. It had nothing to
   do with EQ, it hangs on this box, and it enables the legacy `Set Advertising`
   toggle which is mutually exclusive with the per-instance advertising the
-  firmware now depends on.
+  firmware now depends on. ⚠️ **A second copy survived** in a `thepod-adv.service`
+  systemd unit on the Pi (`sleep 8 && btmgmt advertising on`) and was only
+  harmless because `thepod.service` started 19s *later* and turned it back off.
+  Deleted 2026-08-10 — it would have become a live bug the moment thepod started
+  earlier. Unit files live only on the Pi, which is why nobody saw it; that's
+  why `firmware/thepod.service` is now in the repo.
+- **Slow boot (~35s to a connectable Pod)** → fixed 2026-08-10, all systemd
+  config, no firmware code change. `thepod.service` reached **8.0s, down from
+  27.0s**; total boot 34.9s → 26.4s. Five changes, on the Pi:
+  * `thepod.service` no longer has `After=mpd.service network.target`. That was
+    the whole 19s: mpd waits on `network.target` (17.9s) then takes ~7-9s
+    itself. `MPDController.__init__` already swallows a failed connect and
+    `_ensure_connected()` retries per command, so nothing needed the wait.
+    **This is the one that matters — don't re-add the ordering.**
+  * `thepod-adv.service` deleted (8.2s, and see the entry above).
+  * cloud-init disabled (`/etc/cloud/cloud-init.disabled`) — ~5s on the critical
+    path, and pointless on a fixed appliance. Safe because the WiFi profiles
+    live in `/etc/NetworkManager/system-connections/`, not cloud-init.
+  * `systemctl set-default multi-user.target` — the Pi was booting a full
+    desktop (lightdm, accounts-daemon, udisks2, plymouth) with HDMI disconnected.
+  * `raspotify-crash-report-generator.service` **masked** (10.5s — the single
+    biggest unit). It's a `static` unit, so `disable` does not hold; it must be
+    masked. raspotify itself is left installed but unused.
+  Remaining: `mpd.service` 7.1s and `NetworkManager.service` 5.3s, both now off
+  the path to a connectable Pod, so they cost nothing the user can feel.
+- **Second boot pass, same day** — power-on→advertising ~13.7s → **~11.3s**
+  (3.3s kernel + 8.0s userspace), total boot 26.8s → 24.0s. `/boot/firmware/`
+  edits, backed up as `config.txt.bak` / `cmdline.txt.bak` **on the FAT
+  partition**, so recovery is readable from any Mac with a card reader:
+  * **`auto_initramfs=0`** — the whole 2.5s kernel saving. Pi OS ships a 22MB
+    initramfs that this box does not need: root is plain ext4 on mmcblk0p2 (no
+    LVM/LUKS), and `modules.builtin` lists **`ext4.ko` and `mmc_block.ko` as
+    builtin**. Check that before re-enabling anything here.
+  * Dropped `console=serial0,115200` (every kernel line written synchronously
+    out a 115200 UART), `splash`/plymouth, and the dead `ds=nocloud` datasource.
+  * `camera_auto_detect=0`, `display_auto_detect=0`, commented out
+    `dtoverlay=vc4-kms-v3d` + `max_framebuffers` — full KMS stack on a headless
+    box. **`dtoverlay=iqaudio-dacplus` is the DAC — never touch it.**
+  * zram/`dphys-swapfile`/`rpi-resize-swap-file` masked, `e2scrub_reap` masked.
+  ⚠️ **Read the critical chain, not `blame`.** The graphics/serial/swap removals
+  above bought only ~0.1s of userspace, because none of them were ever on the
+  path to `thepod.service` — they just looked big in `blame`, which lists
+  parallel units. `systemd-analyze critical-chain thepod.service` is the only
+  number that means anything here.
+- **Why the remaining ~8s of userspace is NOT worth chasing, and why Pi OS
+  stays.** Measured, it is: `dev-mmcblk0p2.device` 1.8s (SD card enumeration),
+  `systemd-fsck` 1.4s, udevd+udev-trigger 1.1s, `bluetooth.service` 0.9s,
+  tmpfiles 0.4s. That is generic Linux on slow storage — **none of it is Pi OS
+  bloat, so swapping distro buys almost nothing.** Buildroot with a custom init
+  would reach 2-3s, but it means cross-building BlueZ (*with* the legacy-MGMT
+  advertising workaround above), MPD, Python, Pillow, alsaequal and
+  NetworkManager into an image, and every firmware change stops being `scp` and
+  becomes an image rebuild + reflash. Rejected. If more is ever needed, in
+  order: **read-only root** (kills the 1.4s fsck *and* makes the inevitable
+  power-yank safe — the real win for a portable device), then a faster A2 SD
+  card. fsck is deliberately **left on**: this device has no guaranteed clean
+  shutdown.
+  Note the Pi has **no usable suspend state**, so "just don't boot" needs an
+  idle-draw measurement first — see the open INA219 question below.
+- ⚠️ **OPEN: the battery readings are not trustworthy.** `get_battery_info()`
+  reports ~**-28 mA at 3.78 V ≈ 0.11 W** for a fully active Zero 2 W (WiFi, BT,
+  MPD). That is impossible — a Zero 2 W idles nearer 0.5-0.7 W. Worse, across
+  consecutive reads the **voltage rises (3.772→3.812 V) while current stays
+  negative**, i.e. "discharging" while charging: the sign convention and the
+  reading disagree. Partially addressed 2026-08-10 by fixing `_CONFIG` to
+  Waveshare's reference `0x399F` (32 V, ±320 mV) — the old `0x019F` (16 V,
+  ±40 mV) capped current at 40 mV/0.1 Ω = **400 mA** and then silently
+  saturated, so anything measured under load was pinned rather than measured.
+  **That fix did not change the idle reading**, so the root cause is still open.
+  Most likely the INA219 sits on the battery leg only, so with USB power
+  attached it reads a trickle rather than system draw. Settle it with an inline
+  USB power meter and a run on battery alone before trusting `percent`, before
+  designing anything around always-on, and before touching the naive 3.0-4.2 V
+  percent curve.
 - **Pairing screen stuck on "0 found" while BLE genuinely worked** → two bugs
   stacked. (1) `PairingScreen`'s scan effect re-ran on every transition to
   `'disconnected'`, but `startScan()` *ends* by setting `'disconnected'` and

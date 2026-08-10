@@ -1,0 +1,18 @@
+[Unit]
+Description=ThePod GATT Server
+# Deliberately NOT After=mpd.service/network.target. MPDController swallows a
+# failed first connect and _ensure_connected() retries per command, so waiting
+# on MPD only delays BLE — it cost 19s of boot. mpd starts in parallel via Wants.
+After=bluetooth.target
+Wants=bluetooth.target mpd.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/alcehmy/thepod/firmware
+ExecStart=/home/alcehmy/thepod/venv/bin/python3 -u main.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

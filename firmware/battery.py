@@ -19,8 +19,12 @@ _REG_BUS     = 0x02
 _REG_CURRENT = 0x04
 _REG_CAL     = 0x05
 
-# 16 V range, PGA ±40 mV, 12-bit ADC, continuous
-_CONFIG = 0x019F
+# 32 V range, PGA ±320 mV, 12-bit ADC, continuous — Waveshare's reference config
+# for this HAT. Was 0x019F (16 V, ±40 mV), which caps current at 40mV/0.1Ω =
+# 400 mA and then silently saturates: a Zero 2 W with WiFi TX and the DAC live
+# draws well past that, so any reading taken under load was pinned, not measured.
+# Changing PGA does not affect scaling — the current LSB comes from _CAL.
+_CONFIG = 0x399F
 # Cal = 0.04096 / (100e-6 * 0.1) = 4096
 _CAL    = 4096
 
