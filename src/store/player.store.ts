@@ -38,13 +38,17 @@ interface PlayerStore extends NowPlaying {
 
 const REPEAT_CYCLE: RepeatMode[] = ['off', 'one', 'all'];
 
-// Volume curve: quadratic with 15% MPD ceiling.
-// Prevents ear damage at max and gives fine control at low values.
-// UI 0-100 → MPD 0-15:  mpd = (ui/100)^2 * 15
-// MPD 0-15 → UI 0-100:  ui = sqrt(mpd/15) * 100
-const VOL_MAX = 15;
-const uiToMpd = (ui: number) => Math.round(Math.pow(ui / 100, 2) * VOL_MAX);
-const mpdToUi = (mpd: number) => Math.round(Math.sqrt(Math.max(0, mpd) / VOL_MAX) * 100);
+// Volume is 1:1 with MPD. It used to be a quadratic curve onto a 15% ceiling,
+// which is why "full" in the app was audibly quiet — UI 100 sent MPD 15.
+// Both halves of that existed to compensate for mpd.conf's `mixer_type
+// "software"`, which scales samples linearly (so it needed a perceptual curve)
+// and, on a bit-perfect player, throws away bit depth at every step below 100%.
+// mpd.conf now uses the PCM5122's own `Digital` control (`mixer_type
+// "hardware"`), which attenuates in the DAC and is already mapped in dB — so a
+// second curve on top only makes the slider bottom-heavy. Keep these in sync:
+// re-adding a ceiling here without reverting mpd.conf brings the quiet bug back.
+const uiToMpd = (ui: number) => Math.round(Math.max(0, Math.min(100, ui)));
+const mpdToUi = (mpd: number) => Math.round(Math.max(0, Math.min(100, mpd)));
 
 const INITIAL = {
   song: null,

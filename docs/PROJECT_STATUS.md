@@ -443,11 +443,18 @@ Bluetooth permission.
   file transfer goes over `podIp:podPort` (HTTP server in `http_server.py`).
 - **`player.store.ts`**: playback actions are thin `sendCommand`
   fire-and-forget wrappers; queue mutations use `request()` and re-`loadQueue()`
-  on `OK`. **Volume is remapped**: UI shows 0-100, but MPD volume is capped to
-  0-15 (`VOL_MAX`) via a quadratic curve (`uiToMpd = round((ui/100)^2 * 15)`,
-  inverse `mpdToUi`) — deliberate, to avoid ear-damaging output level and give
-  finer low-volume control; don't "fix" this to be linear without understanding
-  why. `addedSongIds: Set<string>` is **session-only provenance** for the queue
+  on `OK`. **Volume is 1:1 with MPD** (`uiToMpd`/`mpdToUi` are clamps, nothing
+  more) as of 2026-08-11. It *was* a quadratic curve onto a `VOL_MAX = 15`
+  ceiling, which meant **UI 100 sent MPD 15** and the Pod was audibly quiet at
+  "full" — the bug that got reported. Both halves of that remap existed only to
+  compensate for `mpd.conf`'s `mixer_type "software"`: software mixing scales
+  samples linearly (hence the perceptual curve) and, below 100%, discards bit
+  depth on a player that displays a **"Bit-perfect"** badge. `mpd.conf` now uses
+  `mixer_type "hardware"` on the PCM5122's own `Digital` control (0-207, already
+  dB-mapped), so the DAC attenuates and a second curve here would only make the
+  slider bottom-heavy. **These two are a pair** — re-adding a ceiling app-side
+  without reverting `mpd.conf` brings the quiet bug straight back. Note max is
+  now genuinely 0 dB into IEMs. `addedSongIds: Set<string>` is **session-only provenance** for the queue
   screen's "Added by you" section — MPD's queue has no notion of how a track
   got there, so the store remembers the ids it appended itself; it is not
   persisted and resets on app restart. `applyNowPlaying` is the single ingest
@@ -1221,6 +1228,18 @@ fallback registering unattended at boot.
   `RequestDefaultAgent`, not before. It now does. Verified by
   `busctl get-property … Adapter1 Pairable` → `b false`, and by `bondable`
   disappearing from `btmgmt info` current settings.
+- **All playback died after the boot-time pass — "Failed to open ALSA device
+  `equal`: No such file or directory"** → `/etc/asound.conf` pointed `slave.pcm`
+  at **`plughw:1,0`**, a hardcoded card *index*. Commenting out
+  `dtoverlay=vc4-kms-v3d` removed the HDMI audio card sitting at index 0, so
+  IQaudIODAC shifted 1 → 0 and ALSA failed with `Cannot get card index for 1`.
+  MPD stayed `active` and the app looked fine — tracks "played" instantly and
+  silently, which is why this reads as an app bug and isn't one. Fixed by
+  addressing the card **by name**: `plughw:CARD=IQaudIODAC,DEV=0`, in both
+  `/etc/asound.conf` and `firmware/setup_eq.sh` (which hardcoded an even staler
+  `plughw:2,0`). ⚠️ **Never reference an ALSA card by index on this box** — any
+  overlay change reshuffles them. `aplay -l` gives the name. Backup at
+  `/etc/asound.conf.bak`, and `/etc/mpd.conf.bak`.
 - **`sudo btmgmt advertising on` in `setup_eq.sh`** → deleted. It had nothing to
   do with EQ, it hangs on this box, and it enables the legacy `Set Advertising`
   toggle which is mutually exclusive with the per-instance advertising the
