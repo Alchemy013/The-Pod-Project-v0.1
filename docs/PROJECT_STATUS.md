@@ -1228,6 +1228,20 @@ fallback registering unattended at boot.
   `RequestDefaultAgent`, not before. It now does. Verified by
   `busctl get-property … Adapter1 Pairable` → `b false`, and by `bondable`
   disappearing from `btmgmt info` current settings.
+- **Pod took ~30s to appear in the app, after the boot work supposedly fixed
+  boot** → `MPDController.__init__` called `_connect()` eagerly, and `main()` is
+  sequential, so the GATT server and advertising sat behind it. Harmless while
+  `thepod.service` was ordered `After=mpd.service` (MPD was already up, connect
+  returned instantly) — but once that ordering was removed, thepod started at
+  8s and blocked **~10s** on socket-activated MPD, pushing advertising to ~23.5s
+  and undoing most of the boot win. `__init__` no longer connects;
+  `_ensure_connected()` already establishes the link on first use, and the
+  idle-watcher thread warms MPD in parallel. Gap from firmware start to
+  advertising went 10s → **0.13s**. `_connect()` also now sets a 3s socket
+  timeout *before* connecting (raised to 10s after): `_cmd()` runs on the GLib
+  main-loop thread, so an unbounded connect against a wedged MPD would stall
+  every BLE command. **Anything added to `main()` before `start_server()` must
+  be non-blocking** — that path is the time-to-advertising budget.
 - **All playback died after the boot-time pass — "Failed to open ALSA device
   `equal`: No such file or directory"** → `/etc/asound.conf` pointed `slave.pcm`
   at **`plughw:1,0`**, a hardcoded card *index*. Commenting out
@@ -1249,9 +1263,17 @@ fallback registering unattended at boot.
   Deleted 2026-08-10 — it would have become a live bug the moment thepod started
   earlier. Unit files live only on the Pi, which is why nobody saw it; that's
   why `firmware/thepod.service` is now in the repo.
-- **Slow boot (~35s to a connectable Pod)** → fixed 2026-08-10, all systemd
-  config, no firmware code change. `thepod.service` reached **8.0s, down from
-  27.0s**; total boot 34.9s → 26.4s. Five changes, on the Pi:
+- **Slow boot (~35s to a connectable Pod)** → fixed 2026-08-10/11.
+  ⚠️ **Measure time-to-*advertising*, not `critical-chain thepod.service`.** The
+  service starting is not the Pod being connectable: Python startup + imports
+  cost ~2.1s after it, and a blocking call inside `main()` once cost 10s more
+  (next entry). The honest number is the monotonic timestamp of
+  `[ADV] Advertisement registered`:
+  `journalctl -u thepod -b -o short-monotonic | grep 'Advertisement registered'`.
+  Reporting the service-start number here overstated the fix by ~10s once
+  already. **Advertising now lands at ~13.6s** (3.3s kernel · 8.1s systemd to
+  thepod.service · 2.1s Python · 0.1s advertise), down from ~28s.
+  Five changes, on the Pi:
   * `thepod.service` no longer has `After=mpd.service network.target`. That was
     the whole 19s: mpd waits on `network.target` (17.9s) then takes ~7-9s
     itself. `MPDController.__init__` already swallows a failed connect and

@@ -9,10 +9,20 @@ class MPDController:
         self._client = mpd.MPDClient()
         self._lock = threading.Lock()
         self._connected = False
-        self._connect()
+        # Deliberately does NOT connect here. main() is sequential, so a blocking
+        # connect delays the GATT server and advertising behind it. MPD is
+        # socket-activated and takes ~8s to come up, so once thepod stopped
+        # waiting on mpd.service this blocked ~10s and pushed advertising from
+        # 8s out to 20s — the Pod looked slow to connect. _ensure_connected()
+        # already establishes the link on first use, and the idle-watcher thread
+        # warms MPD in parallel without blocking this one.
 
     def _connect(self):
         try:
+            # Bound the connect: _cmd() runs on the GLib main-loop thread, so an
+            # unbounded connect against a wedged MPD stalls every BLE command.
+            # Raised to 10 afterwards so slow reads (listallinfo) still have room.
+            self._client.timeout = 3
             self._client.connect(MPD_HOST, MPD_PORT)
             self._client.timeout = 10
             self._connected = True
