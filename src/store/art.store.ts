@@ -162,16 +162,37 @@ export const useArtStore = create<ArtStore>((set, get) => ({
   },
 }));
 
+/**
+ * What each size actually is, from the firmware's Pillow resize
+ * (`command_handler._get_album_art`): small 80px q70 · medium 300px q78 ·
+ * large 640px q85.
+ *
+ * Fallback order per requested size. Two rules, and the second one is the whole
+ * point of this table:
+ *
+ * 1. A **larger** cached image is always an acceptable stand-in — it costs
+ *    memory, never quality.
+ * 2. A **smaller** one may only stand in for one step down. Falling all the way
+ *    from `large` to `small` put an 80px thumbnail in a 350pt square on Now
+ *    Playing — visibly blocky, and then visibly replaced a moment later when
+ *    the real 640px arrived. `prefetchLibrary` caches `small` for every song,
+ *    so that path was hit on essentially every track. A hue block for a beat is
+ *    better than showing the wrong-quality cover and correcting it.
+ */
+const FALLBACK: Record<ArtSize, ArtSize[]> = {
+  large: ['large', 'medium'],
+  medium: ['medium', 'large', 'small'],
+  small: ['small', 'medium', 'large'],
+};
+
 /** Read cached art for a path without triggering a fetch. */
 export function useArt(path: string | undefined, size: ArtSize = 'medium'): string | null {
   return useArtStore((s) => {
     if (!path) return null;
-    // Fall back across sizes so a row thumb shows immediately while the
-    // larger version is still being chunked over BLE.
-    return s.art[key(path, size)]
-      ?? s.art[key(path, 'medium')]
-      ?? s.art[key(path, 'large')]
-      ?? s.art[key(path, 'small')]
-      ?? null;
+    for (const candidate of FALLBACK[size]) {
+      const uri = s.art[key(path, candidate)];
+      if (uri) return uri;
+    }
+    return null;
   });
 }
